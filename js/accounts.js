@@ -35,7 +35,10 @@ function loadAccountsTab() {
   for (const k in accounts) {
     const a = accounts[k];
     let inc = 0, exp = 0;
-    a.transactions.forEach(t => { if (t.amount > 0) inc += t.amount; else exp += Math.abs(t.amount); });
+    a.transactions.forEach(t => {
+      if (t.type === 'transferencia') return;
+      if (t.amount > 0) inc += t.amount; else exp += Math.abs(t.amount);
+    });
     const c = document.createElement('div');
     c.className = `account-card ${a.color}`;
     c.style.marginBottom = '11px';
@@ -58,6 +61,7 @@ function openAcctDetail(k) {
   let inc = 0, exp = 0, bal = 0;
   a.transactions.forEach(t => {
     bal += t.amount;
+    if (t.type === 'transferencia') return;
     if (t.amount > 0) inc += t.amount;
     else exp += Math.abs(t.amount);
   });

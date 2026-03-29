@@ -73,8 +73,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const conceptoDest = nota ? `Transferencia ← ${accounts[origen].name} (${nota})`  : `Transferencia ← ${accounts[origen].name}`;
     const idBase = Date.now();
 
-    const txOrigen  = { id: idBase,     date: fecha, concept: concepto,     amount: -monto, type: 'egreso',  esventa: false, accKey: origen,  accName: accounts[origen].name };
-    const txDestino = { id: idBase + 1, date: fecha, concept: conceptoDest, amount:  monto, type: 'ingreso', esventa: false, accKey: destino, accName: accounts[destino].name };
+    const txOrigen  = { id: idBase,     date: fecha, concept: concepto,     amount: -monto, type: 'transferencia', esventa: false, accKey: origen,  accName: accounts[origen].name };
+    const txDestino = { id: idBase + 1, date: fecha, concept: conceptoDest, amount:  monto, type: 'transferencia', esventa: false, accKey: destino, accName: accounts[destino].name };
 
     accounts[origen].transactions.push(txOrigen);
     accounts[destino].transactions.push(txDestino);

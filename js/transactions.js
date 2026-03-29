@@ -33,7 +33,10 @@ function loadTransactions() {
 
   // Summary
   let income = 0, expense = 0;
-  allTx.forEach(tx => { if (tx.amount >= 0) income += tx.amount; else expense += Math.abs(tx.amount); });
+  allTx.forEach(tx => {
+    if (tx.type === 'transferencia') return; // no afecta contabilidad
+    if (tx.amount >= 0) income += tx.amount; else expense += Math.abs(tx.amount);
+  });
   const sumEl = document.getElementById('monthSummary');
   if (txFilter === 'current') {
     sumEl.style.display = 'grid';
@@ -54,12 +57,15 @@ function loadTransactions() {
   allTx.forEach(tx => {
     const d = document.createElement('div');
     d.className = 'vi';
+    const isTransfer = tx.type === 'transferencia';
+    const amtClass  = isTransfer ? '' : (tx.amount >= 0 ? 'positive' : 'negative');
+    const amtPrefix = isTransfer ? '🔁 ' : (tx.amount >= 0 ? '+' : '');
     d.innerHTML = `
       <div style="flex:1">
         <div class="vi-concept">${tx.concept}</div>
         <div class="vi-meta">${fmtDate(tx.date)} · ${tx.accName}</div>
       </div>
-      <div class="vi-amount ${tx.amount >= 0 ? 'positive' : 'negative'}">${tx.amount >= 0 ? '+' : ''}$ ${fmt(tx.amount)}</div>
+      <div class="vi-amount ${amtClass}">${amtPrefix}$ ${fmt(tx.amount)}</div>
       <div class="vi-actions">
         <button class="btn btn-sm btn-s" onclick="editarTx('${tx.accKey}',${tx.id})"><i class="fas fa-edit"></i></button>
         <button class="btn btn-sm btn-d" onclick="delTx('${tx.accKey}',${tx.id})"><i class="fas fa-trash"></i></button>
