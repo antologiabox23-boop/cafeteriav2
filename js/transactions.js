@@ -117,12 +117,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const idx = accounts[origK]?.transactions.findIndex(t => t.id === currentEditId);
       if (idx > -1) {
         accounts[origK].transactions.splice(idx, 1);
-        if (k !== origK) accounts[k].transactions.push({ id: currentEditId, date, concept, amount: signedAmount, type });
-        else accounts[k].transactions.push({ id: currentEditId, date, concept, amount: signedAmount, type });
+        const updatedTx = { id: currentEditId, date, concept, amount: signedAmount, type,
+                            accKey: k, accName: accounts[k].name };
+        accounts[k].transactions.push(updatedTx);
+        // Sheets: eliminar fila vieja y agregar la actualizada
+        Sheets.deleteRow(Sheets.HOJAS.TRANSACCIONES, currentEditId);
+        sheetsSync('transaccion', updatedTx);
       }
     } else {
-      const tx = { id: Date.now(), date, concept, amount: signedAmount, type };
+      const tx = { id: Date.now(), date, concept, amount: signedAmount, type,
+                   accKey: k, accName: accounts[k].name };
       accounts[k].transactions.push(tx);
+      sheetsSync('transaccion', tx);
     }
 
     saveAccounts(); updateUI(); loadTransactions(); loadAccountsTab(); updateCajaHdr();

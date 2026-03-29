@@ -87,6 +87,7 @@ function eliminarTx(k, id) {
   if (idx > -1) {
     accounts[k].transactions.splice(idx, 1);
     saveAccounts();
+    Sheets.deleteRow(Sheets.HOJAS.TRANSACCIONES, id);
     updateUI();
     loadTransactions();
     loadAccountsTab();

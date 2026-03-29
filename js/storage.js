@@ -82,6 +82,59 @@ function exportAllData() {
   };
 }
 
+// ─── Sync optimista a Sheets (llamado por cada módulo al guardar) ─
+// tipo: 'venta' | 'gasto' | 'factura' | 'transaccion' | 'credito' |
+//        'pendiente' | 'insumo' | 'movinv' | 'producto'
+function sheetsSync(tipo, obj) {
+  try {
+    switch (tipo) {
+      case 'venta':
+      case 'transaccion':
+        if (obj && obj.id) {
+          const accKey = obj.accKey || obj.cuentaKey || null;
+          const row = {
+            cuenta:     obj.accName  || (accKey ? accounts[accKey]?.name : '') || '',
+            cuentaKey:  obj.accKey   || obj.cuentaKey || '',
+            id:         obj.id,
+            date:       obj.date,
+            concept:    obj.concept,
+            amount:     obj.amount,
+            type:       obj.type || (obj.amount >= 0 ? 'ingreso' : 'egreso'),
+            esventa:    obj.esventa ? 'SI' : 'NO',
+            cliente:    obj.cliente    || '',
+            facturaId:  obj.facturaId  || '',
+            gastoId:    obj.gastoId    || ''
+          };
+          Sheets.appendRow(Sheets.HOJAS.TRANSACCIONES, row);
+        }
+        break;
+      case 'gasto':
+        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.GASTOS, obj);
+        break;
+      case 'credito':
+        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.CREDITOS, obj);
+        break;
+      case 'pendiente':
+        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.PENDIENTES, obj);
+        break;
+      case 'insumo':
+        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.INSUMOS, obj);
+        break;
+      case 'factura':
+        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.FACTURAS, obj);
+        break;
+      case 'movinv':
+        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.MOV_INV, obj);
+        break;
+      case 'producto':
+        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.PRODUCTOS, obj);
+        break;
+    }
+  } catch (e) {
+    console.warn('[sheetsSync]', tipo, e.message);
+  }
+}
+
 // ─── Importar todo (desde loadAll) ───────────────────────────────
 // Sobreescribe el estado en memoria Y localStorage.
 function importAllData(data) {
