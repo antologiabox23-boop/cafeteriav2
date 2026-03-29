@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════════
    sheets.js — Google Sheets como base de datos en tiempo real
-   v2.1 — GET para lecturas, POST para escrituras (sin límite de tamaño)
+   v2.0 — patrón GET/base64 (sin preflight CORS), escritura optimista
 
    ⚙️  ÚNICO PASO DE CONFIGURACIÓN:
        Reemplaza SCRIPT_URL con la URL de tu Apps Script desplegado.
@@ -14,24 +14,28 @@ const Sheets = (() => {
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybgi_Jo3xE7y429zyTtYWDrJgl1vnk9qIM7Q0ZdKuQ-_eYtY3jEq__4jGlF8RpNXI1/exec';
   // ───────────────────────────────────────────────────────────────
 
-  const TIMEOUT_MS = 30000;
+  const TIMEOUT_MS = 20000;
   let _ready   = false;
   let _syncing = false;
 
-  // ─── HTTP HELPERS ──────────────────────────────────────────────
+  // ─── HTTP HELPER ───────────────────────────────────────────────
+  // Usa GET + payload base64 → evita CORS preflight completamente.
+  // Apps Script permite GET desde cualquier origen sin configuración.
+  async function _call(action, payload = {}) {
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) {
+      throw new Error('⚙️ Configura SCRIPT_URL en js/sheets.js');
+    }
 
-  // GET con payload base64 — para lecturas (ping, getAll)
-  // No tiene payload grande, así que GET funciona bien.
-  async function _get(action, payload = {}) {
-    if (!_validUrl()) throw new Error('⚙️ Configura SCRIPT_URL en js/sheets.js');
-
+    // Codificar payload a base64 UTF-8 usando TextEncoder (soporta todos los caracteres)
     const jsonStr = JSON.stringify(payload);
     const bytes   = new TextEncoder().encode(jsonStr);
     const b64     = btoa(String.fromCharCode(...bytes));
-    const url = `${SCRIPT_URL}?action=${action}&payload=${encodeURIComponent(b64)}`;
+    const encoded = encodeURIComponent(b64);
+    const url = `${SCRIPT_URL}?action=${action}&payload=${encoded}`;
 
     const ctrl    = new AbortController();
     const timerId = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+
     let res;
     try {
       res = await fetch(url, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
@@ -41,47 +45,18 @@ const Sheets = (() => {
       throw err;
     }
     clearTimeout(timerId);
-    return _parseResponse(res);
-  }
 
-  // POST con JSON en body — para escrituras (syncAll, addRow, updateRow, deleteRow)
-  // Sin límite de tamaño. Apps Script acepta POST si el script lo maneja.
-  async function _post(action, payload = {}) {
-    if (!_validUrl()) throw new Error('⚙️ Configura SCRIPT_URL en js/sheets.js');
-
-    const body = JSON.stringify({ action, payload });
-    const ctrl    = new AbortController();
-    const timerId = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-    let res;
-    try {
-      res = await fetch(SCRIPT_URL, {
-        method: 'POST',
-        redirect: 'follow',
-        signal: ctrl.signal,
-        headers: { 'Content-Type': 'text/plain' }, // text/plain evita preflight CORS
-        body
-      });
-    } catch (err) {
-      clearTimeout(timerId);
-      if (err.name === 'AbortError') throw new Error('Tiempo de espera agotado. Verifica tu conexión.');
-      throw err;
-    }
-    clearTimeout(timerId);
-    return _parseResponse(res);
-  }
-
-  function _validUrl() {
-    return SCRIPT_URL && SCRIPT_URL.startsWith('https://script.google.com/macros/s/AKfycbybgi_Jo3xE7y429zyTtYWDrJgl1vnk9qIM7Q0ZdKuQ-_eYtY3jEq__4jGlF8RpNXI1/exec');
-  }
-
-  async function _parseResponse(res) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    // Apps Script a veces envuelve el JSON en HTML al hacer redirect
     const text  = await res.text();
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('Respuesta vacía del servidor');
+
     let json;
     try { json = JSON.parse(match[0]); }
     catch (e) { throw new Error('JSON inválido: ' + text.substring(0, 120)); }
+
     if (json.error) throw new Error(json.error);
     return json.data ?? json;
   }
@@ -104,7 +79,7 @@ const Sheets = (() => {
   async function testConnection() {
     _setStatus('Probando conexión…', 'info');
     try {
-      const r = await _get('ping');
+      const r = await _call('ping');
       _setStatus(`✅ Conectado · ${r.spreadsheetName || 'Sheets OK'}`, 'success');
       notify('✅ Conexión exitosa', 'success');
     } catch (err) {
@@ -114,15 +89,17 @@ const Sheets = (() => {
   }
 
   // ─── CARGA INICIAL / PULL ───────────────────────────────────────
+  // Descarga todo desde Sheets, aplica al estado global y refresca UI.
+  // silent=true se usa para el auto-sync al inicio (sin notificaciones molestas).
   async function loadAll(silent = false) {
-    if (!_validUrl()) return;
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) return;
     if (_syncing) return;
     _syncing = true;
     _setSyncLabel('Descargando desde Sheets…');
     if (!silent) notify('Descargando datos de Sheets…', 'info', 4000);
 
     try {
-      const data = await _get('getAll');
+      const data = await _call('getAll');
       _applyData(data);
       _ready = true;
       _setSyncLabel(`✅ Actualizado · ${_ts()}`);
@@ -138,7 +115,9 @@ const Sheets = (() => {
 
   function _applyData(data) {
     if (!data) return;
-    importAllData(data);
+    importAllData(data);          // storage.js
+
+    // Refrescar todos los módulos
     updateUI();
     updateCajaHdr();
     updateVentasList();
@@ -155,13 +134,15 @@ const Sheets = (() => {
   }
 
   // ─── PUSH COMPLETO → SHEETS ────────────────────────────────────
-  // POST evita el límite de URL que causaba "Failed to fetch"
+  // Sobrescribe todo el estado local en Sheets. Sincronización manual.
   async function pushAll() {
-    if (!_validUrl()) { notify('Configura SCRIPT_URL en js/sheets.js', 'warning'); return; }
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) {
+      notify('Configura SCRIPT_URL en js/sheets.js', 'warning'); return;
+    }
     _setSyncLabel('Enviando a Sheets…');
     notify('Sincronizando con Sheets…', 'info', 4000);
     try {
-      await _post('syncAll', { data: exportAllData() });
+      await _call('syncAll', { data: exportAllData() });   // storage.js
       _setSyncLabel(`✅ Sincronizado · ${_ts()}`);
       notify('✅ Datos enviados a Sheets', 'success');
     } catch (err) {
@@ -170,26 +151,30 @@ const Sheets = (() => {
     }
   }
 
-  // ─── ESCRITURA OPTIMISTA (fila a fila) — también POST ──────────
+  // ─── ESCRITURA OPTIMISTA (fila a fila) ─────────────────────────
+  // La UI ya actualizó localStorage antes de llamar estas funciones.
+  // Si falla la llamada a Sheets, solo se registra en consola y el
+  // próximo pushAll() lo corregirá.
+
   function appendRow(sheet, row) {
-    if (!_validUrl()) return;
-    _post('addRow', { sheet, row })
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) return;
+    _call('addRow', { sheet, row })
       .catch(err => console.warn(`[Sheets.appendRow:${sheet}]`, err.message));
   }
 
   function updateRow(sheet, id, data) {
-    if (!_validUrl()) return;
-    _post('updateRow', { sheet, id, data })
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) return;
+    _call('updateRow', { sheet, id, data })
       .catch(err => console.warn(`[Sheets.updateRow:${sheet}]`, err.message));
   }
 
   function deleteRow(sheet, id) {
-    if (!_validUrl()) return;
-    _post('deleteRow', { sheet, id })
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) return;
+    _call('deleteRow', { sheet, id })
       .catch(err => console.warn(`[Sheets.deleteRow:${sheet}]`, err.message));
   }
 
-  // ─── CONSTANTES DE HOJAS ───────────────────────────────────────
+  // ─── CONSTANTES DE HOJAS (contrato con Code.gs) ────────────────
   const HOJAS = {
     TRANSACCIONES: 'Transacciones',
     GASTOS:        'Gastos',
@@ -219,6 +204,8 @@ function testGSConnection() { Sheets.testConnection(); }
 function syncToSheets()     { Sheets.pushAll(); }
 function syncFromSheets()   { Sheets.loadAll(false); }
 
+// La URL ya no se guarda en localStorage — está en el código.
+// Se mantiene saveGSUrl() para no romper el botón del HTML.
 function saveGSUrl() {
   notify('La URL está configurada en js/sheets.js · No se necesita guardarla por dispositivo.', 'info', 5000);
 }
