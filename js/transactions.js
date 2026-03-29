@@ -34,7 +34,7 @@ function loadTransactions() {
   // Summary
   let income = 0, expense = 0;
   allTx.forEach(tx => {
-    if (tx.type === 'transferencia') return; // no afecta contabilidad
+    if (tx.type === 'transferencia' || tx.type === 'base_caja') return;
     if (tx.amount >= 0) income += tx.amount; else expense += Math.abs(tx.amount);
   });
   const sumEl = document.getElementById('monthSummary');
@@ -57,9 +57,9 @@ function loadTransactions() {
   allTx.forEach(tx => {
     const d = document.createElement('div');
     d.className = 'vi';
-    const isTransfer = tx.type === 'transferencia';
+    const isTransfer = tx.type === 'transferencia' || tx.type === 'base_caja';
     const amtClass  = isTransfer ? '' : (tx.amount >= 0 ? 'positive' : 'negative');
-    const amtPrefix = isTransfer ? '🔁 ' : (tx.amount >= 0 ? '+' : '');
+    const amtPrefix = tx.type === 'transferencia' ? '🔁 ' : tx.type === 'base_caja' ? '🏦 ' : (tx.amount >= 0 ? '+' : '');
     d.innerHTML = `
       <div style="flex:1">
         <div class="vi-concept">${tx.concept}</div>

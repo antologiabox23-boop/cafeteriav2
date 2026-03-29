@@ -195,36 +195,190 @@ function updateVentasList() {
 
 function cerrarCaja() {
   const today = fmtDateInput(new Date());
+
+  // ── Calcular cifras del día ──────────────────────────────────────
   let tv = 0, cv = 0;
   const pc = {};
   for (const k in accounts) {
     accounts[k].transactions.forEach(tx => {
-      if (tx.date === today && tx.esventa) { tv += tx.amount; cv++; pc[accounts[k].name] = (pc[accounts[k].name] || 0) + tx.amount; }
+      if (tx.date === today && tx.esventa && tx.type !== 'transferencia') {
+        tv += tx.amount; cv++;
+        pc[accounts[k].name] = (pc[accounts[k].name] || 0) + tx.amount;
+      }
     });
   }
-  const credPend = pendientes.length;
-  const totCred = creditos.reduce((s,c) => s + deudaRestante(c), 0);
-  const todayGastos = gastos.filter(g => g.fecha === today).reduce((s,g) => s + g.monto, 0);
-  const desglose = Object.entries(pc).map(([k,v]) =>
-    `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--cream)"><span>${k}</span><strong>$ ${fmt(v)}</strong></div>`
-  ).join('');
+  const todayGastos  = gastos.filter(g => g.fecha === today).reduce((s,g) => s + g.monto, 0);
+  const netoDia      = tv - todayGastos;
+  const pendCount    = pendientes.length;
+  const pendTotal    = pendientes.reduce((s,p) => s + p.total, 0);
+  const totCred      = creditos.reduce((s,c) => s + deudaRestante(c), 0);
+  const desglose     = Object.entries(pc).map(([n,v]) =>
+    `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--cream)">
+       <span>${n}</span><strong>$ ${fmt(v)}</strong>
+     </div>`).join('');
 
+  // ── Paso 1: resumen + confirmación ──────────────────────────────
   document.getElementById('cierreCajaContent').innerHTML = `
-    <div style="text-align:center;margin-bottom:18px">
+    <div style="text-align:center;margin-bottom:16px">
       <div style="font-size:.75rem;color:#888">${new Date().toLocaleDateString('es-CO',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
       <div style="font-family:'Playfair Display',serif;font-size:2.2rem;font-weight:700;color:var(--cw);margin:8px 0">$ ${fmt(tv)}</div>
-      <div style="font-size:.85rem;color:#888">${cv} ventas realizadas</div>
+      <div style="font-size:.85rem;color:#888">${cv} venta${cv!==1?'s':''} · Neto <strong class="${netoDia>=0?'positive':'negative'}">$ ${fmt(netoDia)}</strong></div>
     </div>
-    <div class="stitle" style="font-size:.86rem"><i class="fas fa-wallet"></i> Por método de pago</div>
-    <div style="background:var(--latte);border-radius:var(--r);padding:13px;margin-bottom:14px">
-      ${desglose || '<p style="color:#bbb;text-align:center;padding:8px">Sin ventas hoy</p>'}
+
+    <div style="background:var(--latte);border-radius:var(--r);padding:13px;margin-bottom:12px">
+      <div style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Por cuenta</div>
+      ${desglose || '<p style="color:#bbb;text-align:center;font-size:.82rem">Sin ventas hoy</p>'}
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-top:2px solid var(--cream);margin-top:4px">
+        <span>Gastos del día</span><span class="negative">- $ ${fmt(todayGastos)}</span>
+      </div>
     </div>
-    <div style="background:var(--latte);border-radius:var(--r);padding:13px;margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--cream)"><span>Gastos del día</span><span class="negative">- $ ${fmt(todayGastos)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--cream)"><span>Neto del día</span><strong><span class="${(tv-todayGastos)>=0?'positive':'negative'}">${tv-todayGastos>=0?'+':''}$ ${fmt(tv-todayGastos)}</span></strong></div>
-      ${credPend > 0 ? `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--cream)"><span>Ventas pendientes</span><span class="negative">${credPend} pend.</span></div>` : ''}
-      ${totCred > 0 ? `<div style="display:flex;justify-content:space-between;padding:7px 0"><span>Total créditos</span><span class="negative">$ ${fmt(totCred)}</span></div>` : ''}
-    </div>
-    <button class="btn btn-p btn-full" onclick="document.getElementById('cierreCajaModal').classList.remove('active')"><i class="fas fa-check"></i> Listo</button>`;
+
+    ${pendCount > 0 ? `
+    <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:var(--r);padding:13px;margin-bottom:12px">
+      <div style="font-size:.82rem;font-weight:600;color:#b8860b;margin-bottom:4px">
+        <i class="fas fa-clock"></i> ${pendCount} pendiente${pendCount!==1?'s':''} sin cobrar — $ ${fmt(pendTotal)}
+      </div>
+      <div style="font-size:.78rem;color:#888">Al confirmar el cierre pasarán automáticamente a <strong>Créditos</strong>.</div>
+    </div>` : ''}
+
+    ${totCred > 0 ? `
+    <div style="background:var(--latte);border-radius:var(--r);padding:10px 13px;margin-bottom:12px;display:flex;justify-content:space-between">
+      <span style="font-size:.82rem">Total créditos activos</span>
+      <span class="negative" style="font-size:.82rem">$ ${fmt(totCred)}</span>
+    </div>` : ''}
+
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-s btn-full" onclick="document.getElementById('cierreCajaModal').classList.remove('active')">
+        Cancelar
+      </button>
+      <button class="btn btn-p btn-full" onclick="_cierrePaso2(${tv},${todayGastos},${netoDia})">
+        <i class="fas fa-arrow-right"></i> Continuar
+      </button>
+    </div>`;
+
   document.getElementById('cierreCajaModal').classList.add('active');
 }
+
+function _cierrePaso2(tv, todayGastos, netoDia) {
+  // Calcular saldo actual en efectivo para sugerir base
+  const efectivoActual = accounts['efectivo']?.transactions.reduce((s,t) => s + t.amount, 0) || 0;
+
+  document.getElementById('cierreCajaContent').innerHTML = `
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:2rem;margin-bottom:6px">💵</div>
+      <div style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--cw)">Base para mañana</div>
+      <div style="font-size:.82rem;color:#888;margin-top:4px">¿Cuánto dinero en efectivo dejas en caja para el día siguiente?</div>
+    </div>
+
+    <div style="background:var(--latte);border-radius:var(--r);padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:4px">
+        <span>Efectivo en caja ahora</span>
+        <strong class="${efectivoActual>=0?'positive':'negative'}">$ ${fmt(efectivoActual)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.82rem">
+        <span>Neto del día</span>
+        <strong class="${netoDia>=0?'positive':'negative'}">$ ${fmt(netoDia)}</strong>
+      </div>
+    </div>
+
+    <div class="fg" style="margin-bottom:16px">
+      <label>Base de caja (Efectivo)</label>
+      <input type="number" id="baseCajaInput" placeholder="0" min="0"
+             style="font-size:1.1rem;font-weight:600;text-align:center"
+             value="">
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-s btn-full" onclick="cerrarCaja()">
+        <i class="fas fa-arrow-left"></i> Volver
+      </button>
+      <button class="btn btn-ok btn-full" onclick="_confirmarCierre()">
+        <i class="fas fa-check"></i> Confirmar Cierre
+      </button>
+    </div>`;
+
+  // Focus al input
+  setTimeout(() => document.getElementById('baseCajaInput')?.focus(), 100);
+}
+
+function _confirmarCierre() {
+  const today     = fmtDateInput(new Date());
+  const baseInput = document.getElementById('baseCajaInput');
+  const base      = parseFloat(baseInput?.value) || 0;
+
+  // 1. Mover todos los pendientes a créditos
+  let movidos = 0;
+  pendientes.forEach(p => {
+    creditos.push({
+      id:     Date.now() + movidos,
+      cliente: p.cliente,
+      deuda:   p.total,
+      desc:    `[Cierre ${today}] ${p.concepto}`,
+      fecha:   p.fecha,
+      pagos:   []
+    });
+    sheetsSync('credito', creditos[creditos.length - 1]);
+    movidos++;
+  });
+  const pendMovidos = pendientes.length;
+  pendientes = [];
+  savePendientes();
+  saveCreditos();
+
+  // 2. Registrar la base como transacción especial en efectivo
+  //    Tipo 'base_caja': ajusta el efectivo al monto indicado sin contar como ingreso
+  if (base > 0) {
+    const efectivoActual = accounts['efectivo'].transactions.reduce((s,t) => s + t.amount, 0);
+    // Solo registramos si hay diferencia, como ajuste de cierre
+    const ajuste = base - efectivoActual;
+    const txBase = {
+      id:       Date.now() + 999,
+      date:     today,
+      concept:  `Base caja día siguiente — $ ${fmt(base)}`,
+      amount:   ajuste,
+      type:     'base_caja',
+      esventa:  false,
+      accKey:   'efectivo',
+      accName:  'Efectivo'
+    };
+    accounts['efectivo'].transactions.push(txBase);
+    sheetsSync('transaccion', txBase);
+  }
+  saveAccounts();
+
+  // 3. Actualizar UI
+  updateUI();
+  updatePendientesList();
+  updatePendBadge();
+  updateCreditosList();
+  loadTransactions();
+  updateCajaHdr();
+
+  // 4. Mostrar confirmación final
+  document.getElementById('cierreCajaContent').innerHTML = `
+    <div style="text-align:center;padding:10px 0 20px">
+      <div style="font-size:3rem;margin-bottom:10px">✅</div>
+      <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--cw);margin-bottom:6px">
+        Cierre completado
+      </div>
+      <div style="font-size:.85rem;color:#888">${new Date().toLocaleDateString('es-CO',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+    </div>
+
+    <div style="background:var(--latte);border-radius:var(--r);padding:13px;margin-bottom:12px">
+      ${pendMovidos > 0 ? `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--cream)">
+        <span style="font-size:.82rem"><i class="fas fa-user-clock" style="color:var(--warn)"></i> Pendientes → Créditos</span>
+        <strong style="font-size:.82rem">${pendMovidos} movido${pendMovidos!==1?'s':''}</strong>
+      </div>` : ''}
+      ${base > 0 ? `
+      <div style="display:flex;justify-content:space-between;padding:6px 0">
+        <span style="font-size:.82rem"><i class="fas fa-money-bill-wave" style="color:var(--ok)"></i> Base efectivo mañana</span>
+        <strong style="font-size:.82rem" class="positive">$ ${fmt(base)}</strong>
+      </div>` : ''}
+    </div>
+
+    <button class="btn btn-p btn-full" onclick="document.getElementById('cierreCajaModal').classList.remove('active')">
+      <i class="fas fa-check"></i> Listo
+    </button>`;
+}
+

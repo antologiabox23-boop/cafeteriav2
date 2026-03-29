@@ -14,10 +14,27 @@ function updateUI() {
       el.className = 'acc-bal ' + (bal >= 0 ? 'positive' : 'negative');
     }
   }
+
+  // Header: saldo del día = ventas hoy - gastos hoy (excluye transferencias y base_caja)
+  const today = typeof fmtDateInput === 'function' ? fmtDateInput(new Date()) : new Date().toISOString().slice(0,10);
+  let ventasHoy = 0, gastosHoy = 0;
+  for (const k in accounts) {
+    accounts[k].transactions.forEach(t => {
+      if (t.date !== today) return;
+      if (t.type === 'transferencia' || t.type === 'base_caja') return;
+      if (t.amount >= 0) ventasHoy += t.amount;
+      else gastosHoy += Math.abs(t.amount);
+    });
+  }
+  if (typeof gastos !== 'undefined') {
+    gastos.filter(g => g.fecha === today).forEach(g => gastosHoy += g.monto);
+  }
+  const saldoDia = ventasHoy - gastosHoy;
+
   const totalEl = document.getElementById('totalGeneral');
   if (totalEl) {
-    totalEl.textContent = `$ ${fmt(total)}`;
-    totalEl.className = 'total-amt ' + (total >= 0 ? '' : 'negative');
+    totalEl.textContent = `$ ${fmt(saldoDia)}`;
+    totalEl.className = 'total-amt ' + (saldoDia >= 0 ? '' : 'negative');
   }
 }
 
