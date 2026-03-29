@@ -151,6 +151,7 @@
     <div style="display:flex;gap:7px">
       <button class="btn btn-p btn-sm" onclick="abrirFacturaModal()"><i class="fas fa-file-invoice"></i> Nueva Factura</button>
       <button class="btn btn-i btn-sm" onclick="abrirInsumoModal()"><i class="fas fa-plus"></i> Insumo</button>
+      <button class="btn btn-s btn-sm" onclick="abrirProdModalDesdeInv()"><i class="fas fa-coffee"></i> Producto</button>
     </div>
   </div>
 
@@ -166,12 +167,14 @@
 
   <!-- Tabs internas inventario -->
   <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    <button class="fbtn active" onclick="switchInvTab('stock',this)"><i class="fas fa-layer-group"></i> Stock Actual</button>
+    <button class="fbtn active" onclick="switchInvTab('stock',this)"><i class="fas fa-layer-group"></i> Stock</button>
+    <button class="fbtn" onclick="switchInvTab('productos',this)"><i class="fas fa-coffee"></i> Productos</button>
     <button class="fbtn" onclick="switchInvTab('facturas',this)"><i class="fas fa-file-invoice-dollar"></i> Facturas</button>
     <button class="fbtn" onclick="switchInvTab('movimientos',this)"><i class="fas fa-history"></i> Movimientos</button>
   </div>
 
   <div id="invStock"></div>
+  <div id="invProductos" style="display:none"></div>
   <div id="invFacturas" style="display:none"></div>
   <div id="invMovimientos" style="display:none"></div>
 </div>
@@ -245,23 +248,9 @@
 
 <!-- ══════════ RESPALDOS / DATOS ══════════ -->
 <div class="tab-content" id="respaldos">
-  <!-- Configuración Google Sheets -->
-  <div class="bkup" style="border-left:4px solid var(--gold)">
-    <h3><i class="fab fa-google" style="color:#4285F4"></i> Google Sheets (Apps Script)</h3>
-    <p style="font-size:.82rem;color:#888;margin-bottom:12px">Conecta tu Apps Script Web App para sincronizar datos en la nube.</p>
-    <div class="fg"><label>URL del Web App (Apps Script)</label>
-      <input type="url" id="gsUrl" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:.8rem">
-    </div>
-    <div class="fbtns" style="margin-top:8px">
-      <button class="btn btn-s btn-sm" onclick="testGSConnection()"><i class="fas fa-plug"></i> Probar Conexión</button>
-      <button class="btn btn-p btn-sm" onclick="saveGSUrl()"><i class="fas fa-save"></i> Guardar URL</button>
-    </div>
-    <div id="gsStatus" style="margin-top:8px;font-size:.8rem"></div>
-  </div>
-
-  <!-- Sincronización -->
+  <!-- Sincronización Sheets -->
   <div class="bkup">
-    <h3><i class="fas fa-sync"></i> Sincronización</h3>
+    <h3><i class="fas fa-sync"></i> Sincronización con Sheets</h3>
     <p style="font-size:.82rem;color:#888;margin-bottom:12px">Envía o recibe datos desde Google Sheets.</p>
     <div style="display:flex;gap:9px;flex-wrap:wrap">
       <button class="btn btn-p" onclick="syncToSheets()"><i class="fas fa-cloud-upload-alt"></i> Enviar a Sheets</button>
@@ -552,14 +541,14 @@
 
 <!-- ══ MODAL FACTURA INVENTARIO ══ -->
 <div class="modal" id="facturaModal">
-  <div class="mc">
-    <div class="mhdr"><h2 id="facturaModalTitle"><i class="fas fa-file-invoice-dollar"></i> Nueva Factura de Compra</h2><button class="cbtn" onclick="document.getElementById('facturaModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
+  <div class="mc" style="max-width:580px">
+    <div class="mhdr"><h2 id="facturaModalTitle"><i class="fas fa-file-invoice-dollar"></i> Nueva Factura</h2><button class="cbtn" onclick="document.getElementById('facturaModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
     <div class="mbody">
       <form id="facturaForm">
         <input type="hidden" id="facturaId">
         <div class="frow">
           <div class="fg"><label>Proveedor</label><input type="text" id="facturaProveedor" placeholder="Ej: Café Colombia S.A." required></div>
-          <div class="fg"><label>N° Factura</label><input type="text" id="facturaNumero" placeholder="Ej: FAC-001"></div>
+          <div class="fg"><label>N° Factura</label><input type="text" id="facturaNumero" placeholder="FAC-001"></div>
         </div>
         <div class="frow">
           <div class="fg"><label>Fecha</label><input type="date" id="facturaFecha" required></div>
@@ -574,21 +563,49 @@
         </div>
         <div class="fg"><label>Nota</label><input type="text" id="facturaNote" placeholder="Opcional"></div>
 
-        <div class="stitle" style="font-size:.85rem;margin-top:10px"><i class="fas fa-boxes"></i> Productos Comprados</div>
-        <div id="facturaItems"></div>
-        <button type="button" class="btn btn-s btn-sm" style="margin-bottom:12px" onclick="addFacturaItem()"><i class="fas fa-plus"></i> Agregar Item</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 8px">
+          <div class="stitle" style="font-size:.85rem;margin:0"><i class="fas fa-boxes"></i> Items</div>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="btn btn-i btn-sm" onclick="addFacturaItem('insumo')"><i class="fas fa-box"></i> + Insumo</button>
+            <button type="button" class="btn btn-s btn-sm" onclick="addFacturaItem('noinv')"><i class="fas fa-tag"></i> + Sin inventario</button>
+          </div>
+        </div>
 
-        <div style="background:var(--latte);border-radius:var(--rs);padding:12px;margin-bottom:14px">
+        <div id="facturaItems"></div>
+
+        <div style="background:var(--latte);border-radius:var(--rs);padding:12px;margin:12px 0">
           <div style="display:flex;justify-content:space-between;font-weight:600">
             <span>Total Factura:</span>
             <span id="facturaTotalDisplay" style="font-family:'Playfair Display',serif;color:var(--cw);font-size:1.1rem">$ 0</span>
           </div>
+          <div style="font-size:.75rem;color:#888;margin-top:4px">Se registrará como gasto en la cuenta seleccionada</div>
         </div>
 
         <div class="fbtns">
           <button type="button" class="btn btn-s" onclick="document.getElementById('facturaModal').classList.remove('active')">Cancelar</button>
           <button type="button" class="btn btn-d btn-sm" id="deleteFacturaBtn" style="display:none;" onclick="eliminarFactura()"><i class="fas fa-trash"></i></button>
           <button type="submit" class="btn btn-p"><i class="fas fa-save"></i> Guardar Factura</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MINI MODAL: CREAR PRODUCTO DESDE FACTURA ══ -->
+<div class="modal" id="prodDesdeFacturaModal">
+  <div class="mc" style="max-width:340px">
+    <div class="mhdr"><h2>☕ Nuevo Producto</h2><button class="cbtn" onclick="document.getElementById('prodDesdeFacturaModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
+    <div class="mbody">
+      <form id="prodDesdeFacturaForm">
+        <input type="hidden" id="pdfItemIdx">
+        <div class="frow">
+          <div class="fg"><label>Emoji</label><input type="text" id="pdfEmoji" placeholder="☕" maxlength="4"></div>
+          <div class="fg"><label>Precio Venta ($)</label><input type="number" id="pdfPrecio" placeholder="0" min="0" required></div>
+        </div>
+        <div class="fg"><label>Nombre del producto</label><input type="text" id="pdfNombre" placeholder="Ej: Café Americano" required></div>
+        <div class="fbtns">
+          <button type="button" class="btn btn-s" onclick="document.getElementById('prodDesdeFacturaModal').classList.remove('active')">Cancelar</button>
+          <button type="submit" class="btn btn-p"><i class="fas fa-save"></i> Crear Producto</button>
         </div>
       </form>
     </div>
