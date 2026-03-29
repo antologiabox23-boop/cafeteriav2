@@ -150,14 +150,13 @@
     <div class="stitle" style="margin:0"><i class="fas fa-boxes"></i> Inventario</div>
     <div style="display:flex;gap:7px">
       <button class="btn btn-p btn-sm" onclick="abrirFacturaModal()"><i class="fas fa-file-invoice"></i> Nueva Factura</button>
-      <button class="btn btn-i btn-sm" onclick="abrirInsumoModal()"><i class="fas fa-plus"></i> Insumo</button>
       <button class="btn btn-s btn-sm" onclick="abrirProdModalDesdeInv()"><i class="fas fa-coffee"></i> Producto</button>
     </div>
   </div>
 
   <!-- Resumen stock -->
   <div class="msum" style="margin-bottom:14px">
-    <div class="scard"><div class="slbl">Insumos</div><div class="sval" id="invTotalInsumos">0</div></div>
+    <div class="scard"><div class="slbl">Productos con stock</div><div class="sval" id="invTotalInsumos">0</div></div>
     <div class="scard"><div class="slbl">Stock Bajo</div><div class="sval negative" id="invStockBajo">0</div></div>
     <div class="scard"><div class="slbl">Facturas</div><div class="sval" id="invTotalFacturas">0</div></div>
   </div>
@@ -404,19 +403,17 @@
         </div>
         <div class="fg"><label>Nombre</label><input type="text" id="prodNombre" placeholder="Ej: Café Americano" required></div>
 
-        <!-- Insumos que consume este producto -->
+        <!-- Stock directo del producto -->
         <div style="margin-top:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px">
-              <i class="fas fa-boxes" style="color:var(--cw)"></i> Descuenta del stock al vender
-            </div>
-            <button type="button" class="btn btn-i btn-sm" style="padding:3px 10px" onclick="addProdInsumo()">
-              <i class="fas fa-plus"></i> Insumo
-            </button>
+          <div style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
+            <i class="fas fa-boxes" style="color:var(--cw)"></i> Stock inicial
           </div>
-          <div id="prodInsumosList"></div>
+          <div class="fg" style="margin:0">
+            <input type="number" id="prodStock" placeholder="Dejar vacío = sin control de stock" min="0" step="1">
+          </div>
           <div style="font-size:.72rem;color:#aaa;margin-top:4px">
-            Opcional. Si no vinculas insumos, el producto se vende sin descontar stock.
+            Opcional. Si dejas vacío, el producto se vende sin límite de stock.
+            Al registrar facturas con este producto, el stock se sumará automáticamente.
           </div>
         </div>
 
@@ -583,8 +580,8 @@
         <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 8px">
           <div class="stitle" style="font-size:.85rem;margin:0"><i class="fas fa-boxes"></i> Items</div>
           <div style="display:flex;gap:6px">
-            <button type="button" class="btn btn-i btn-sm" onclick="addFacturaItem('insumo')"><i class="fas fa-box"></i> + Insumo</button>
-            <button type="button" class="btn btn-s btn-sm" onclick="addFacturaItem('noinv')"><i class="fas fa-tag"></i> + Sin inventario</button>
+            <button type="button" class="btn btn-i btn-sm" onclick="addFacturaItem('producto')"><i class="fas fa-box"></i> + Producto catálogo</button>
+            <button type="button" class="btn btn-s btn-sm" onclick="addFacturaItem('otro')"><i class="fas fa-tag"></i> + Otro gasto</button>
           </div>
         </div>
 
@@ -629,53 +626,6 @@
   </div>
 </div>
 
-<!-- ══ MODAL INSUMO ══ -->
-<div class="modal" id="insumoModal">
-  <div class="mc">
-    <div class="mhdr"><h2 id="insumoModalTitle"><i class="fas fa-box"></i> Nuevo Insumo</h2><button class="cbtn" onclick="document.getElementById('insumoModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
-    <div class="mbody">
-      <form id="insumoForm">
-        <input type="hidden" id="insumoId">
-        <div class="frow">
-          <div class="fg"><label>Nombre</label><input type="text" id="insumoNombre" placeholder="Ej: Café molido" required></div>
-          <div class="fg"><label>Emoji</label><input type="text" id="insumoEmoji" placeholder="☕" maxlength="4"></div>
-        </div>
-        <div class="frow">
-          <div class="fg"><label>Unidad</label>
-            <select id="insumoUnidad">
-              <option value="kg">kg</option>
-              <option value="g">g</option>
-              <option value="L">L</option>
-              <option value="ml">ml</option>
-              <option value="und">und</option>
-              <option value="paq">paq</option>
-              <option value="caj">caj</option>
-            </select>
-          </div>
-          <div class="fg"><label>Stock Mínimo</label><input type="number" id="insumoStockMin" placeholder="0" min="0" step="0.1"></div>
-        </div>
-        <div class="frow">
-          <div class="fg"><label>Stock Actual</label><input type="number" id="insumoStockActual" placeholder="0" min="0" step="0.1"></div>
-          <div class="fg"><label>Categoría</label>
-            <select id="insumoCategoria">
-              <option value="Café">☕ Café</option>
-              <option value="Lácteos">🥛 Lácteos</option>
-              <option value="Azúcar">🍬 Azúcar/Endulzantes</option>
-              <option value="Empaque">📦 Empaques</option>
-              <option value="Limpieza">🧹 Limpieza</option>
-              <option value="Otros">📌 Otros</option>
-            </select>
-          </div>
-        </div>
-        <div class="fbtns">
-          <button type="button" class="btn btn-s" onclick="document.getElementById('insumoModal').classList.remove('active')">Cancelar</button>
-          <button type="button" class="btn btn-d btn-sm" id="deleteInsumoBtn" style="display:none;" onclick="eliminarInsumo()"><i class="fas fa-trash"></i></button>
-          <button type="submit" class="btn btn-p">Guardar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 
 <!-- Scripts modulares -->
 <script src="js/utils.js"></script>
