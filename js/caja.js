@@ -113,7 +113,71 @@ function abrirCobro(esPendiente = false, pendId = null) {
   document.querySelectorAll('.pmb').forEach(b => b.classList.remove('sel'));
   document.querySelector('.pmb[data-cuenta="efectivo"]').classList.add('sel');
   selPayMethod = 'efectivo';
+
+  // ── Mostrar resumen de stock en el modal ──────────────────────
+  _renderCobroStock();
+
   document.getElementById('cobroModal').classList.add('active');
+}
+
+function _renderCobroStock() {
+  // Eliminar sección previa si existe
+  const prev = document.getElementById('cobroStockResumen');
+  if (prev) prev.remove();
+
+  if (!ordenActual.length) return;
+
+  // Solo mostrar si algún producto tiene insumos vinculados
+  const itemsConStock = ordenActual.filter(it => {
+    const prod = getProds().find(p => p.id === it.id);
+    return prod && prod.insumos && prod.insumos.length > 0;
+  });
+
+  if (!itemsConStock.length) return;
+
+  let hayProblema = false;
+  const rows = ordenActual.map(it => {
+    const prod = getProds().find(p => p.id === it.id);
+    if (!prod || !prod.insumos || !prod.insumos.length) return null;
+
+    const stockInfo = typeof _prodStockInfo === 'function' ? _prodStockInfo(prod) : null;
+    const disponible = stockInfo ? stockInfo.disponible : null;
+    const insuficiente = disponible !== null && disponible < it.qty;
+    if (insuficiente) hayProblema = true;
+
+    const color = disponible === null ? '#888'
+                : disponible <= 0     ? 'var(--err)'
+                : insuficiente        ? 'var(--warn)'
+                : 'var(--ok)';
+    const label = disponible === null ? ''
+                : disponible <= 0     ? '⚠️ Sin stock'
+                : insuficiente        ? `⚠️ Solo ${disponible} disponibles`
+                : `✅ Stock OK (${disponible} disp.)`;
+
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--cream)">
+      <span style="font-size:.8rem">${prod.emoji||'☕'} ${prod.nombre} × ${it.qty}</span>
+      <span style="font-size:.78rem;font-weight:600;color:${color}">${label}</span>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  if (!rows) return;
+
+  const section = document.createElement('div');
+  section.id = 'cobroStockResumen';
+  section.style.cssText = `background:var(--latte);border-radius:var(--rs);padding:10px 12px;margin-bottom:10px;border-left:3px solid ${hayProblema ? 'var(--warn)' : 'var(--ok)'}`;
+  section.innerHTML = `
+    <div style="font-size:.72rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
+      <i class="fas fa-boxes"></i> Stock disponible
+    </div>
+    ${rows}
+    ${hayProblema ? `<div style="font-size:.75rem;color:var(--warn);margin-top:6px"><i class="fas fa-exclamation-triangle"></i> Verifica el stock antes de confirmar</div>` : ''}`;
+
+  // Insertar antes de la sección de métodos de pago
+  const mbody = document.getElementById('cobroModal')?.querySelector('.mbody');
+  const totalEl = document.getElementById('cobroTotal')?.parentElement;
+  if (mbody && totalEl) {
+    totalEl.insertAdjacentElement('afterend', section);
+  }
 }
 
 function selPay(btn) {

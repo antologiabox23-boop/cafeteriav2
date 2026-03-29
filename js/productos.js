@@ -56,7 +56,35 @@ function descontarStockPorVenta(itemsVendidos) {
 
   itemsVendidos.forEach(it => {
     const prod = getProds().find(p => p.id === it.id);
-    if (!prod || !prod.insumos || !prod.insumos.length) return;
+    if (!prod) return;
+
+    // ── Caso 2: producto sin insumos vinculados → buscar insumo por nombre ──
+    if (!prod.insumos || !prod.insumos.length) {
+      const nombreProd = (prod.nombre || '').trim().toLowerCase();
+      const idx = insumos.findIndex(i =>
+        (i.nombre || '').trim().toLowerCase() === nombreProd
+      );
+      if (idx !== -1) {
+        const consumo = it.qty || 1;
+        insumos[idx].stockActual = Math.max(0, (parseFloat(insumos[idx].stockActual)||0) - consumo);
+        movInventario.push({
+          id:           Date.now() + Math.random(),
+          insumoId:     insumos[idx].id,
+          insumoNombre: insumos[idx].nombre,
+          emoji:        insumos[idx].emoji,
+          unidad:       insumos[idx].unidad,
+          cantidad:     consumo,
+          tipo:         'salida',
+          motivo:       `Venta: ${it.qty||1}x ${prod.nombre}`,
+          fecha
+        });
+        huboMovimiento = true;
+      }
+      return;
+    }
+
+    // ── Caso 1: producto con insumos vinculados explícitamente ──
+    if (!prod.insumos || !prod.insumos.length) return;
 
     prod.insumos.forEach(vi => {
       const idx = insumos.findIndex(i => i.id == vi.insumoId);
