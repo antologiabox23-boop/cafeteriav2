@@ -22,7 +22,7 @@ const Sheets = (() => {
   // Usa GET + payload base64 → evita CORS preflight completamente.
   // Apps Script permite GET desde cualquier origen sin configuración.
   async function _call(action, payload = {}) {
-    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) {
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/AKfycbybgi_Jo3xE7y429zyTtYWDrJgl1vnk9qIM7Q0ZdKuQ-_eYtY3jEq__4jGlF8RpNXI1/exec')) {
       throw new Error('⚙️ Configura SCRIPT_URL en js/sheets.js');
     }
 
@@ -92,7 +92,7 @@ const Sheets = (() => {
   // Descarga todo desde Sheets, aplica al estado global y refresca UI.
   // silent=true se usa para el auto-sync al inicio (sin notificaciones molestas).
   async function loadAll(silent = false) {
-    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) return;
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/AKfycbybgi_Jo3xE7y429zyTtYWDrJgl1vnk9qIM7Q0ZdKuQ-_eYtY3jEq__4jGlF8RpNXI1/exec')) return;
     if (_syncing) return;
     _syncing = true;
     _setSyncLabel('Descargando desde Sheets…');
@@ -136,7 +136,7 @@ const Sheets = (() => {
   // ─── PUSH COMPLETO → SHEETS ────────────────────────────────────
   // Sobrescribe todo el estado local en Sheets. Sincronización manual.
   async function pushAll() {
-    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) {
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/AKfycbybgi_Jo3xE7y429zyTtYWDrJgl1vnk9qIM7Q0ZdKuQ-_eYtY3jEq__4jGlF8RpNXI1/exec')) {
       notify('Configura SCRIPT_URL en js/sheets.js', 'warning'); return;
     }
     _setSyncLabel('Enviando a Sheets…');
@@ -157,7 +157,7 @@ const Sheets = (() => {
   // próximo pushAll() lo corregirá.
 
   function appendRow(sheet, row) {
-    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) return;
+    if (!SCRIPT_URL || !SCRIPT_URL.startsWith('https://script.google.com/macros/s/AKfycbybgi_Jo3xE7y429zyTtYWDrJgl1vnk9qIM7Q0ZdKuQ-_eYtY3jEq__4jGlF8RpNXI1/exec')) return;
     _call('addRow', { sheet, row })
       .catch(err => console.warn(`[Sheets.appendRow:${sheet}]`, err.message));
   }
