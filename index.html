@@ -63,6 +63,10 @@
   </div>
 
   <div class="stitle"><i class="fas fa-th"></i> Productos Rápidos</div>
+  <div class="cobrar-row" style="margin-bottom:10px">
+    <button class="btn btn-ok" onclick="guardarPendiente()"><i class="fas fa-clock"></i> Pendiente</button>
+    <button class="btn btn-cobrar" onclick="abrirCobro()"><i class="fas fa-check-circle"></i> Cobrar</button>
+  </div>
   <div class="prod-grid" id="prodGrid"></div>
 
   <div class="orden" id="ordenPanel">
@@ -78,10 +82,6 @@
     <div class="orden-total-row">
       <span class="otl">Total</span>
       <span class="otv" id="ordenTotal">$ 0</span>
-    </div>
-    <div class="cobrar-row" style="margin-top:10px">
-      <button class="btn btn-ok" onclick="guardarPendiente()"><i class="fas fa-clock"></i> Pendiente</button>
-      <button class="btn btn-cobrar" onclick="abrirCobro()"><i class="fas fa-check-circle"></i> Cobrar</button>
     </div>
     <button class="btn btn-s btn-full" style="margin-top:8px;font-size:.78rem" onclick="limpiarOrden()"><i class="fas fa-times"></i> Limpiar pedido</button>
   </div>
@@ -200,6 +200,10 @@
 
 <!-- ══════════ MOVIMIENTOS ══════════ -->
 <div class="tab-content" id="transacciones">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <div class="stitle" style="margin:0"><i class="fas fa-exchange-alt"></i> Movimientos</div>
+    <button class="btn btn-p btn-sm" id="addTransactionBtn"><i class="fas fa-plus"></i> Nueva</button>
+  </div>
   <div class="mfilter">
     <div class="mnav">
       <button class="mbtn" id="prevMonthBtn"><i class="fas fa-chevron-left"></i></button>
@@ -232,6 +236,10 @@
 
 <!-- ══════════ CUENTAS ══════════ -->
 <div class="tab-content" id="cuentas">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="stitle" style="margin:0"><i class="fas fa-wallet"></i> Cuentas</div>
+    <button class="btn btn-p btn-sm" id="addTransferBtn"><i class="fas fa-exchange-alt"></i> Transferencia</button>
+  </div>
   <div id="accountsList"></div>
 </div>
 
@@ -281,9 +289,7 @@
 
 </div><!-- /container -->
 
-<!-- FABs -->
-<button class="fab fab-main" id="addTransactionBtn" title="Nueva Transacción"><i class="fas fa-plus"></i></button>
-<button class="fab" id="addTransferBtn" title="Transferencia entre cuentas" style="bottom:90px;background:var(--cr);opacity:.92"><i class="fas fa-exchange-alt"></i></button>
+
 
 <!-- ══ MODAL TRANSACCIÓN ══ -->
 <div class="modal" id="transactionModal">
