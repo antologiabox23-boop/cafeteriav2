@@ -1,11 +1,21 @@
 /* ══════════════════════════════════════════
-   inventario.js — Inventario, Facturas y Productos
+   inventario.js — Inventario, Facturas y Movimientos  v3.0
+   ─────────────────────────────────────────
+   Cambios v3.0:
+   • Tab "Stock" → muestra los PRODUCTOS RÁPIDOS con su stock actual.
+     No hay insumos separados.
+   • Tab "Productos" → vista del catálogo de venta (igual que antes).
+   • Tab "Facturas" → al agregar un item, se selecciona de los
+     productos del catálogo. Si el item coincide con un producto
+     rápido, suma stock. Si el nombre no existe en el catálogo,
+     se registra en la factura pero NO afecta el stock.
+   • Tab "Movimientos" → historial de stockMovs (entradas/salidas).
+   • Se eliminó el modal de "Insumo" y su form.
    ══════════════════════════════════════════ */
 
-let editingInsumoId   = null;
-let editingFacturaId  = null;
-let facturaItemsTemp  = [];
-let invTabActual      = 'stock';
+let editingFacturaId = null;
+let facturaItemsTemp = [];
+let invTabActual     = 'stock';
 
 // ─────────────────────────────────────────
 // SWITCH TAB INVENTARIO
@@ -16,11 +26,8 @@ function switchInvTab(tab, btn) {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  const target = document.getElementById(
-    tab === 'stock'       ? 'invStock'      :
-    tab === 'productos'   ? 'invProductos'  :
-    tab === 'facturas'    ? 'invFacturas'   : 'invMovimientos'
-  );
+  const map = { stock:'invStock', productos:'invProductos', facturas:'invFacturas', movimientos:'invMovimientos' };
+  const target = document.getElementById(map[tab]);
   if (target) target.style.display = 'block';
   document.querySelectorAll('#inventario .fbtn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
@@ -33,75 +40,127 @@ function switchInvTab(tab, btn) {
 function renderInventario() {
   updateInvStats();
   renderAlertas();
-  if (invTabActual === 'stock')            renderStock();
+  if      (invTabActual === 'stock')       renderStock();
   else if (invTabActual === 'productos')   renderProductosInv();
   else if (invTabActual === 'facturas')    renderFacturas();
   else if (invTabActual === 'movimientos') renderMovimientos();
 }
 
 function updateInvStats() {
-  document.getElementById('invTotalInsumos').textContent  = insumos.length;
-  const bajo = insumos.filter(i => i.stockMin > 0 && i.stockActual <= i.stockMin).length;
-  document.getElementById('invStockBajo').textContent     = bajo;
-  document.getElementById('invTotalFacturas').textContent = facturas.length;
+  const prods    = getProds().filter(p => p.stock !== null && p.stock !== undefined);
+  const sinStock = prods.filter(p => (p.stock || 0) <= 0).length;
+  const stockBajo = prods.filter(p => (p.stock || 0) > 0 && (p.stock || 0) <= 3).length;
+
+  const elProd  = document.getElementById('invTotalInsumos');
+  const elBajo  = document.getElementById('invStockBajo');
+  const elFact  = document.getElementById('invTotalFacturas');
+  const elLabel = elProd?.previousElementSibling; // label del stat card
+
+  if (elProd)  elProd.textContent  = prods.length;
+  if (elBajo)  elBajo.textContent  = sinStock + stockBajo;
+  if (elFact)  elFact.textContent  = facturas.length;
+  // Actualizar la etiqueta del primer stat card
+  const lblEl = document.querySelector('#inventario .slbl');
+  if (lblEl && lblEl.textContent === 'Insumos') lblEl.textContent = 'Productos con stock';
 }
 
 function renderAlertas() {
   const cont = document.getElementById('invAlertas');
   cont.innerHTML = '';
-  insumos.filter(i => i.stockMin > 0 && i.stockActual <= i.stockMin).forEach(i => {
-    const d = document.createElement('div');
-    d.className = 'alerta-stock';
-    d.innerHTML = `
-      <div class="alerta-stock-text"><i class="fas fa-exclamation-triangle"></i> Stock bajo: <strong>${i.emoji||'📦'} ${i.nombre}</strong> — ${i.stockActual} ${i.unidad} (mín: ${i.stockMin})</div>
-      <button class="btn btn-warn btn-sm" onclick="abrirFacturaModal()"><i class="fas fa-shopping-cart"></i> Comprar</button>`;
-    cont.appendChild(d);
-  });
+  getProds()
+    .filter(p => p.stock !== null && p.stock !== undefined && (p.stock || 0) <= 3)
+    .forEach(p => {
+      const d = document.createElement('div');
+      d.className = 'alerta-stock';
+      const msg = (p.stock || 0) <= 0 ? 'Sin stock' : `Solo ${p.stock} und`;
+      d.innerHTML = `
+        <div class="alerta-stock-text">
+          <i class="fas fa-exclamation-triangle"></i>
+          ${(p.stock||0) <= 0 ? '🚫' : '⚠️'} <strong>${p.emoji||'☕'} ${p.nombre}</strong> — ${msg}
+        </div>
+        <button class="btn btn-warn btn-sm" onclick="abrirFacturaModal()">
+          <i class="fas fa-shopping-cart"></i> Comprar
+        </button>`;
+      cont.appendChild(d);
+    });
 }
 
 // ─────────────────────────────────────────
-// STOCK
+// TAB STOCK
 // ─────────────────────────────────────────
 function renderStock() {
-  const cont = document.getElementById('invStock');
-  if (!insumos.length) {
-    cont.innerHTML = `<div class="empty"><i class="fas fa-boxes"></i><h3>Sin insumos registrados</h3><p>Agrega insumos con el botón "Insumo"</p></div>`;
+  const cont  = document.getElementById('invStock');
+  const prods = getProds();
+
+  const conStock = prods.filter(p => p.stock !== null && p.stock !== undefined);
+  const sinCtrl  = prods.filter(p => p.stock === null || p.stock === undefined);
+
+  if (!prods.length) {
+    cont.innerHTML = `<div class="empty"><i class="fas fa-boxes"></i><h3>Sin productos en catálogo</h3><p>Agrega productos en la pestaña Productos</p></div>`;
     return;
   }
-  const cats = {};
-  insumos.forEach(i => { const c = i.categoria||'Otros'; if(!cats[c]) cats[c]=[]; cats[c].push(i); });
+
   cont.innerHTML = '';
-  Object.entries(cats).forEach(([cat, items]) => {
+
+  // ── Productos con control de stock ──
+  if (conStock.length) {
     const sec = document.createElement('div');
-    sec.innerHTML = `<div class="stitle" style="font-size:.85rem"><i class="fas fa-tag"></i> ${cat}</div>`;
-    items.forEach(i => {
-      const bajo = i.stockMin > 0 && i.stockActual <= i.stockMin;
-      const card = document.createElement('div');
-      card.className = `insumo-card ${bajo ? 'stock-bajo' : 'stock-ok'}`;
+    sec.innerHTML = `<div class="stitle" style="font-size:.85rem"><i class="fas fa-boxes"></i> Stock controlado</div>`;
+    conStock.forEach(p => {
+      const s     = p.stock || 0;
+      const bajo  = s > 0 && s <= 3;
+      const vacio = s <= 0;
+      const card  = document.createElement('div');
+      card.className = `insumo-card ${vacio ? 'stock-bajo' : bajo ? 'stock-bajo' : 'stock-ok'}`;
       card.innerHTML = `
         <div class="ins-info">
-          <div class="ins-name">${i.emoji||'📦'} ${i.nombre}</div>
-          <div class="ins-meta">Mín: ${i.stockMin} ${i.unidad} · ${i.categoria}</div>
+          <div class="ins-name">${p.emoji||'☕'} ${p.nombre}</div>
+          <div class="ins-meta">$ ${fmt(p.precio)} · precio de venta</div>
         </div>
         <div class="ins-stock">
-          <div class="ins-qty ${bajo?'bajo':''}">${i.stockActual} <span style="font-size:.7rem;font-weight:400">${i.unidad}</span></div>
-          ${bajo ? '<div style="font-size:.65rem;color:var(--err);font-weight:600">STOCK BAJO</div>' : ''}
+          <div class="ins-qty ${vacio||bajo ? 'bajo' : ''}">${s} <span style="font-size:.7rem;font-weight:400">und</span></div>
+          ${vacio ? '<div style="font-size:.65rem;color:var(--err);font-weight:600">SIN STOCK</div>'
+                  : bajo ? '<div style="font-size:.65rem;color:var(--warn);font-weight:600">STOCK BAJO</div>' : ''}
         </div>
         <div class="ins-actions">
-          <button class="btn btn-sm btn-s" onclick="abrirInsumoModal(${JSON.stringify(i).replace(/"/g,'&quot;')})"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-sm btn-d" onclick="eliminarInsumo(${i.id})"><i class="fas fa-trash"></i></button>
+          <button class="btn btn-sm btn-s" onclick="editarProd(${p.id})"><i class="fas fa-edit"></i></button>
         </div>`;
       sec.appendChild(card);
     });
     cont.appendChild(sec);
-  });
+  }
+
+  // ── Productos sin control de stock ──
+  if (sinCtrl.length) {
+    const sec2 = document.createElement('div');
+    sec2.style.marginTop = '16px';
+    sec2.innerHTML = `<div class="stitle" style="font-size:.85rem;color:#aaa"><i class="fas fa-tag"></i> Sin control de stock</div>`;
+    sinCtrl.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'insumo-card stock-ok';
+      card.style.opacity = '.7';
+      card.innerHTML = `
+        <div class="ins-info">
+          <div class="ins-name">${p.emoji||'☕'} ${p.nombre}</div>
+          <div class="ins-meta">$ ${fmt(p.precio)}</div>
+        </div>
+        <div class="ins-stock">
+          <div style="font-size:.72rem;color:#aaa">—</div>
+        </div>
+        <div class="ins-actions">
+          <button class="btn btn-sm btn-s" onclick="editarProd(${p.id})"><i class="fas fa-edit"></i></button>
+        </div>`;
+      sec2.appendChild(card);
+    });
+    cont.appendChild(sec2);
+  }
 }
 
 // ─────────────────────────────────────────
-// PRODUCTOS (catálogo de venta)
+// TAB PRODUCTOS (catálogo)
 // ─────────────────────────────────────────
 function renderProductosInv() {
-  const cont = document.getElementById('invProductos');
+  const cont  = document.getElementById('invProductos');
   const prods = getProds();
 
   let html = `
@@ -110,24 +169,29 @@ function renderProductosInv() {
     </div>`;
 
   if (!prods.length) {
-    cont.innerHTML = html + `<div class="empty"><i class="fas fa-coffee"></i><h3>Sin productos en catálogo</h3><p>Agrega los productos que vendes</p></div>`;
+    cont.innerHTML = html + `<div class="empty"><i class="fas fa-coffee"></i><h3>Sin productos en catálogo</h3></div>`;
     return;
   }
 
-  html += prods.map(p => `
+  html += prods.map(p => {
+    const info = _prodStockInfo(p);
+    const stockBadge = info.limitado
+      ? (info.stock <= 0
+          ? `<span style="color:var(--err);font-size:.72rem">⚠️ Sin stock</span>`
+          : `<span style="color:${info.bajo?'var(--warn)':'var(--ok)'};font-size:.72rem">📦 ${info.stock} und</span>`)
+      : '';
+    return `
     <div class="insumo-card stock-ok" style="align-items:center">
       <div class="ins-info">
         <div class="ins-name">${p.emoji||'☕'} ${p.nombre}</div>
-        <div class="ins-meta">Precio de venta</div>
-      </div>
-      <div class="ins-stock">
-        <div class="ins-qty" style="color:var(--ok)">$ ${fmt(p.precio)}</div>
+        <div class="ins-meta">$ ${fmt(p.precio)} ${stockBadge}</div>
       </div>
       <div class="ins-actions">
         <button class="btn btn-sm btn-s" onclick="editarProdDesdeInv(${p.id})"><i class="fas fa-edit"></i></button>
         <button class="btn btn-sm btn-d" onclick="eliminarProd(${p.id})"><i class="fas fa-trash"></i></button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   cont.innerHTML = html;
 }
@@ -137,10 +201,7 @@ function abrirProdModalDesdeInv(p = null) {
     abrirProdModal(p);
     const modal = document.getElementById('prodModal');
     const observer = new MutationObserver(() => {
-      if (!modal.classList.contains('active')) {
-        renderInventario();
-        observer.disconnect();
-      }
+      if (!modal.classList.contains('active')) { renderInventario(); observer.disconnect(); }
     });
     observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
   }
@@ -152,7 +213,7 @@ function editarProdDesdeInv(id) {
 }
 
 // ─────────────────────────────────────────
-// FACTURAS
+// TAB FACTURAS
 // ─────────────────────────────────────────
 function renderFacturas() {
   const cont = document.getElementById('invFacturas');
@@ -165,10 +226,10 @@ function renderFacturas() {
     const card = document.createElement('div');
     card.className = 'factura-card';
     const itemsHtml = f.items.map(it => {
-      const inv = it.ingresaInventario !== false;
+      const afecta = it.afectaStock !== false && it.prodId;
       return `<div style="font-size:.78rem;color:#888;margin-bottom:2px">
-        ${it.emoji||'📦'} ${it.nombre} · ${it.cantidad} ${it.unidad||'und'} · $${fmt(it.precioUnitario)}/u = <strong>$${fmt(it.subtotal)}</strong>
-        <span style="margin-left:4px;font-size:.7rem" title="${inv?'Ingresa a inventario':'No afecta inventario'}">${inv?'📦':'🏷️'}</span>
+        ${it.emoji||'📦'} ${it.nombre} · ${it.cantidad} und · $${fmt(it.precioUnitario)}/u = <strong>$${fmt(it.subtotal)}</strong>
+        <span style="margin-left:4px;font-size:.7rem" title="${afecta?'Suma al stock del producto':'No afecta stock'}">${afecta?'📦':'🏷️'}</span>
       </div>`;
     }).join('');
     card.innerHTML = `
@@ -188,86 +249,62 @@ function renderFacturas() {
 }
 
 // ─────────────────────────────────────────
-// MOVIMIENTOS
+// TAB MOVIMIENTOS
 // ─────────────────────────────────────────
 function renderMovimientos() {
   const cont = document.getElementById('invMovimientos');
-  if (!movInventario.length) {
+  if (!stockMovs.length) {
     cont.innerHTML = `<div class="empty"><i class="fas fa-history"></i><h3>Sin movimientos</h3></div>`;
     return;
   }
   cont.innerHTML = '';
-  [...movInventario].sort((a,b)=>b.id-a.id).slice(0,100).forEach(m => {
+  [...stockMovs].sort((a,b) => b.id - a.id).slice(0, 120).forEach(m => {
     const d = document.createElement('div');
     d.className = 'mov-item';
     const esEntrada = m.tipo === 'entrada';
     d.innerHTML = `
       <div class="mov-info">
-        <div class="mov-concept">${m.emoji||'📦'} ${m.insumoNombre}</div>
+        <div class="mov-concept">${m.emoji||'☕'} ${m.prodNombre}</div>
         <div class="mov-meta">${fmtDate(m.fecha)} · ${m.motivo}</div>
       </div>
-      <div class="mov-qty ${esEntrada?'mov-entrada':'mov-salida'}">${esEntrada?'+':'-'}${m.cantidad} ${m.unidad}</div>`;
+      <div class="mov-qty ${esEntrada?'mov-entrada':'mov-salida'}">${esEntrada?'+':'-'}${m.cantidad} und</div>`;
     cont.appendChild(d);
   });
 }
 
 // ─────────────────────────────────────────
-// MODAL INSUMO
-// ─────────────────────────────────────────
-function abrirInsumoModal(ins = null) {
-  editingInsumoId = ins ? ins.id : null;
-  document.getElementById('insumoModalTitle').innerHTML = `<i class="fas fa-box"></i> ${ins?'Editar Insumo':'Nuevo Insumo'}`;
-  document.getElementById('insumoId').value           = ins ? ins.id : '';
-  document.getElementById('insumoNombre').value       = ins ? ins.nombre : '';
-  document.getElementById('insumoEmoji').value        = ins ? (ins.emoji||'') : '';
-  document.getElementById('insumoUnidad').value       = ins ? ins.unidad : 'und';
-  document.getElementById('insumoStockMin').value     = ins ? ins.stockMin : '0';
-  document.getElementById('insumoStockActual').value  = ins ? ins.stockActual : '0';
-  document.getElementById('insumoCategoria').value    = ins ? (ins.categoria||'Otros') : 'Otros';
-  document.getElementById('deleteInsumoBtn').style.display = ins ? 'inline-flex' : 'none';
-  document.getElementById('insumoModal').classList.add('active');
-}
-
-function eliminarInsumo(id) {
-  if (!confirm('¿Eliminar este insumo del catálogo?')) return;
-  insumos = insumos.filter(i => i.id != id);
-  saveInsumos(); renderInventario();
-  notify('Insumo eliminado', 'info');
-  document.getElementById('insumoModal').classList.remove('active');
-}
-
-// ─────────────────────────────────────────
-// MODAL FACTURA — items con toggle inventario
+// MODAL FACTURA
 // ─────────────────────────────────────────
 function abrirFacturaModal(fac = null) {
-  editingFacturaId  = fac ? fac.id : null;
-  facturaItemsTemp  = fac ? JSON.parse(JSON.stringify(fac.items)) : [];
-  document.getElementById('facturaModalTitle').innerHTML = `<i class="fas fa-file-invoice-dollar"></i> ${fac?'Editar Factura':'Nueva Factura'}`;
-  document.getElementById('facturaId').value          = fac ? fac.id : '';
-  document.getElementById('facturaProveedor').value   = fac ? fac.proveedor : '';
-  document.getElementById('facturaNumero').value      = fac ? (fac.numero||'') : '';
-  document.getElementById('facturaFecha').value       = fac ? fac.fecha : fmtDateInput(new Date());
-  document.getElementById('facturaCuenta').value      = fac ? fac.cuenta : 'efectivo';
-  document.getElementById('facturaNote').value        = fac ? (fac.nota||'') : '';
+  editingFacturaId = fac ? fac.id : null;
+  facturaItemsTemp = fac ? JSON.parse(JSON.stringify(fac.items)) : [];
+  document.getElementById('facturaModalTitle').innerHTML =
+    `<i class="fas fa-file-invoice-dollar"></i> ${fac ? 'Editar Factura' : 'Nueva Factura'}`;
+  document.getElementById('facturaId').value        = fac ? fac.id : '';
+  document.getElementById('facturaProveedor').value = fac ? fac.proveedor : '';
+  document.getElementById('facturaNumero').value    = fac ? (fac.numero||'') : '';
+  document.getElementById('facturaFecha').value     = fac ? fac.fecha : fmtDateInput(new Date());
+  document.getElementById('facturaCuenta').value    = fac ? fac.cuenta : 'efectivo';
+  document.getElementById('facturaNote').value      = fac ? (fac.nota||'') : '';
   document.getElementById('deleteFacturaBtn').style.display = fac ? 'inline-flex' : 'none';
   renderFacturaItems();
   document.getElementById('facturaModal').classList.add('active');
 }
 
-// tipo: 'insumo' = ingresa a inventario, 'noinv' = no ingresa
-function addFacturaItem(tipo = 'insumo') {
-  const ingresa    = tipo === 'insumo';
-  const defInsumo  = ingresa && insumos.length ? insumos[0] : null;
+// ── Agregar item a la factura ──
+// tipo: 'producto' = se intenta vincular al catálogo, 'otro' = sólo gasto
+function addFacturaItem(tipo = 'producto') {
+  const esProd = tipo === 'producto';
+  const prods  = getProds();
+  const defProd = esProd && prods.length ? prods[0] : null;
   facturaItemsTemp.push({
-    insumoId:          defInsumo ? defInsumo.id : null,
-    nombre:            defInsumo ? defInsumo.nombre : '',
-    emoji:             defInsumo ? (defInsumo.emoji||'📦') : '🏷️',
-    unidad:            defInsumo ? defInsumo.unidad : 'und',
-    cantidad:          1,
-    precioUnitario:    0,
-    subtotal:          0,
-    ingresaInventario: ingresa,
-    crearProducto:     false
+    prodId:       defProd ? defProd.id   : null,
+    nombre:       defProd ? defProd.nombre : '',
+    emoji:        defProd ? (defProd.emoji||'☕') : '🏷️',
+    cantidad:     1,
+    precioUnitario: 0,
+    subtotal:     0,
+    afectaStock:  esProd && !!defProd   // solo afecta si está vinculado al catálogo
   });
   renderFacturaItems();
 }
@@ -276,75 +313,69 @@ function renderFacturaItems() {
   const cont = document.getElementById('facturaItems');
   if (!facturaItemsTemp.length) {
     cont.innerHTML = `<div style="text-align:center;color:#bbb;font-size:.82rem;padding:14px 0">
-      Usa <strong>+ Insumo</strong> para items que ingresan al stock, o <strong>+ Sin inventario</strong> para compras que solo se registran como gasto.
+      Usa <strong>+ Producto catálogo</strong> para items que suman al stock,
+      o <strong>+ Otro gasto</strong> para compras que solo se registran como egreso.
     </div>`;
     calcFacturaTotal();
     return;
   }
 
-  const insumoOpts = insumos.map(i =>
-    `<option value="${i.id}" data-nombre="${i.nombre}" data-unidad="${i.unidad}" data-emoji="${i.emoji||'📦'}">${i.emoji||'📦'} ${i.nombre} (${i.unidad})</option>`
+  const prodOpts = getProds().map(p =>
+    `<option value="${p.id}" data-nombre="${p.nombre}" data-emoji="${p.emoji||'☕'}">${p.emoji||'☕'} ${p.nombre} — Stock actual: ${p.stock ?? '—'}</option>`
   ).join('');
 
   cont.innerHTML = '';
   facturaItemsTemp.forEach((item, idx) => {
-    const inv = item.ingresaInventario !== false;
-    const row = document.createElement('div');
-    row.style.cssText = `background:var(--latte);border-radius:var(--rs);padding:10px;margin-bottom:8px;border-left:3px solid ${inv ? 'var(--ok)' : '#ccc'}`;
+    const esProd = item.afectaStock !== false && item.prodId;
+    const row    = document.createElement('div');
+    row.style.cssText = `background:var(--latte);border-radius:var(--rs);padding:10px;margin-bottom:8px;border-left:3px solid ${esProd ? 'var(--ok)' : '#ccc'}`;
 
-    // Badge tipo + botón eliminar
+    // Header del item
     row.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:.72rem;font-weight:700;color:${inv?'var(--ok)':'#999'};text-transform:uppercase;letter-spacing:.5px">
-          ${inv ? '📦 Ingresa a inventario' : '🏷️ Sin inventario'}
+        <span style="font-size:.72rem;font-weight:700;color:${esProd?'var(--ok)':'#999'};text-transform:uppercase;letter-spacing:.5px">
+          ${esProd ? '📦 Suma al stock' : '🏷️ Solo gasto'}
         </span>
         <button type="button" class="btn btn-d btn-sm" style="padding:3px 8px" onclick="removeFacturaItem(${idx})">
           <i class="fas fa-times"></i>
         </button>
       </div>`;
 
-    if (inv) {
-      // Selector de insumo o nombre personalizado
+    if (item.prodId !== undefined && getProds().length) {
+      // Selector de producto del catálogo
       const selDiv = document.createElement('div');
       selDiv.className = 'fg';
       selDiv.style.margin = '0 0 8px';
-      selDiv.innerHTML = `<label style="font-size:.72rem">Insumo</label>
-        <select onchange="onFacturaItemInsumoChange(${idx},this)">
-          <option value="__custom__">✏️ Nombre personalizado</option>
-          ${insumoOpts}
-        </select>`;
-      row.appendChild(selDiv);
-      const sel = selDiv.querySelector('select');
-      sel.value = item.insumoId ? item.insumoId : '__custom__';
 
-      if (!item.insumoId) {
+      if (item.afectaStock !== false) {
+        // Item de catálogo: mostrar selector
+        selDiv.innerHTML = `<label style="font-size:.72rem">Producto del catálogo</label>
+          <select onchange="onFacturaItemProdChange(${idx},this)">
+            ${prodOpts}
+          </select>`;
+        row.appendChild(selDiv);
+        const sel = selDiv.querySelector('select');
+        if (item.prodId) sel.value = item.prodId;
+      } else {
+        // Item de otro gasto: nombre libre
         const ni = document.createElement('div');
         ni.className = 'fg';
         ni.style.margin = '0 0 8px';
-        ni.innerHTML = `<label style="font-size:.72rem">Nombre</label>
-          <input type="text" placeholder="Nombre del insumo" value="${item.nombre||''}"
+        ni.innerHTML = `<label style="font-size:.72rem">Descripción</label>
+          <input type="text" placeholder="Ej: Vasos, servilletas..." value="${item.nombre||''}"
             oninput="facturaItemsTemp[${idx}].nombre=this.value">`;
         row.appendChild(ni);
       }
-    } else {
-      // Item sin inventario: nombre libre
-      const ni = document.createElement('div');
-      ni.className = 'fg';
-      ni.style.margin = '0 0 8px';
-      ni.innerHTML = `<label style="font-size:.72rem">Descripción</label>
-        <input type="text" placeholder="Ej: Vasos, Creatina, Servilletas..." value="${item.nombre||''}"
-          oninput="facturaItemsTemp[${idx}].nombre=this.value">`;
-      row.appendChild(ni);
     }
 
-    // Cantidad / precio
+    // Cantidad y precio
     const numRow = document.createElement('div');
     numRow.className = 'frow';
     numRow.style.margin = '0';
     numRow.innerHTML = `
       <div class="fg" style="margin:0">
         <label style="font-size:.72rem">Cantidad</label>
-        <input type="number" placeholder="0" min="0" step="0.01" value="${item.cantidad}"
+        <input type="number" placeholder="0" min="0" step="1" value="${item.cantidad}"
           oninput="updateFacturaItem(${idx},'cantidad',this.value)">
       </div>
       <div class="fg" style="margin:0">
@@ -354,42 +385,12 @@ function renderFacturaItems() {
       </div>`;
     row.appendChild(numRow);
 
-    // Subtotal + checkbox crear producto (solo para "sin inventario")
+    // Subtotal
     const sub = document.createElement('div');
     sub.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-top:8px';
-    const subtotal = (item.cantidad||0)*(item.precioUnitario||0);
+    const subtotal = (item.cantidad||0) * (item.precioUnitario||0);
     sub.innerHTML = `<span style="font-size:.78rem;color:#888">Subtotal: <strong>$ ${fmt(subtotal)}</strong></span>`;
-
-    if (!inv) {
-      const cpLabel = document.createElement('label');
-      cpLabel.style.cssText = 'font-size:.75rem;color:var(--cw);cursor:pointer;display:flex;align-items:center;gap:5px';
-      cpLabel.innerHTML = `
-        <input type="checkbox" ${item.crearProducto?'checked':''} onchange="toggleCrearProducto(${idx},this.checked)">
-        Crear en catálogo`;
-      sub.appendChild(cpLabel);
-    }
     row.appendChild(sub);
-
-    // Campos de creación de producto
-    if (!inv && item.crearProducto) {
-      const cp = document.createElement('div');
-      cp.style.cssText = 'background:#fff;border-radius:var(--rs);padding:8px;margin-top:8px;border:1px dashed var(--cw)';
-      cp.innerHTML = `
-        <div style="font-size:.72rem;color:var(--cw);font-weight:600;margin-bottom:6px">☕ Datos del producto en catálogo</div>
-        <div class="frow" style="margin:0">
-          <div class="fg" style="margin:0">
-            <label style="font-size:.72rem">Emoji</label>
-            <input type="text" placeholder="☕" maxlength="4" value="${item.prodEmoji||''}"
-              oninput="facturaItemsTemp[${idx}].prodEmoji=this.value">
-          </div>
-          <div class="fg" style="margin:0">
-            <label style="font-size:.72rem">Precio Venta $</label>
-            <input type="number" placeholder="0" min="0" value="${item.prodPrecio||''}"
-              oninput="facturaItemsTemp[${idx}].prodPrecio=parseFloat(this.value)||0">
-          </div>
-        </div>`;
-      row.appendChild(cp);
-    }
 
     cont.appendChild(row);
   });
@@ -397,25 +398,15 @@ function renderFacturaItems() {
   calcFacturaTotal();
 }
 
-function toggleCrearProducto(idx, val) {
-  facturaItemsTemp[idx].crearProducto = val;
-  if (val && !facturaItemsTemp[idx].prodEmoji) facturaItemsTemp[idx].prodEmoji = '🏷️';
-  renderFacturaItems();
-}
-
-function onFacturaItemInsumoChange(idx, sel) {
-  const val = sel.value;
-  if (val === '__custom__') {
-    facturaItemsTemp[idx].insumoId = null;
-    facturaItemsTemp[idx].nombre   = '';
-    facturaItemsTemp[idx].emoji    = '📦';
-    facturaItemsTemp[idx].unidad   = 'und';
-  } else {
-    const opt = sel.querySelector(`option[value="${val}"]`);
-    facturaItemsTemp[idx].insumoId = parseInt(val);
-    facturaItemsTemp[idx].nombre   = opt.dataset.nombre;
-    facturaItemsTemp[idx].unidad   = opt.dataset.unidad;
-    facturaItemsTemp[idx].emoji    = opt.dataset.emoji;
+function onFacturaItemProdChange(idx, sel) {
+  const val = parseInt(sel.value);
+  const prods = getProds();
+  const prod  = prods.find(p => p.id === val);
+  if (prod) {
+    facturaItemsTemp[idx].prodId  = prod.id;
+    facturaItemsTemp[idx].nombre  = prod.nombre;
+    facturaItemsTemp[idx].emoji   = prod.emoji || '☕';
+    facturaItemsTemp[idx].afectaStock = true;
   }
   renderFacturaItems();
 }
@@ -423,9 +414,8 @@ function onFacturaItemInsumoChange(idx, sel) {
 function updateFacturaItem(idx, field, val) {
   facturaItemsTemp[idx][field] = parseFloat(val) || 0;
   facturaItemsTemp[idx].subtotal = facturaItemsTemp[idx].cantidad * facturaItemsTemp[idx].precioUnitario;
-  // Solo recalcular total sin re-renderizar todo (evita perder foco)
   calcFacturaTotal();
-  // Actualizar subtotal visible en el item específico sin re-render completo
+  // Actualizar subtotal visible sin re-render completo
   const rows = document.getElementById('facturaItems').children;
   if (rows[idx]) {
     const subEl = rows[idx].querySelector('strong');
@@ -460,33 +450,6 @@ function eliminarFactura(id) {
 // ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
 
-  // ── Form insumo ──────────────────────────
-  document.getElementById('insumoForm')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const nombre      = document.getElementById('insumoNombre').value.trim();
-    const emoji       = document.getElementById('insumoEmoji').value.trim() || '📦';
-    const unidad      = document.getElementById('insumoUnidad').value;
-    const stockMin    = parseFloat(document.getElementById('insumoStockMin').value) || 0;
-    const stockActual = parseFloat(document.getElementById('insumoStockActual').value) || 0;
-    const categoria   = document.getElementById('insumoCategoria').value;
-    if (!nombre) { notify('Ingresa un nombre', 'warning'); return; }
-
-    if (editingInsumoId) {
-      const idx = insumos.findIndex(i => i.id == editingInsumoId);
-      if (idx > -1) insumos[idx] = { ...insumos[idx], nombre, emoji, unidad, stockMin, stockActual, categoria };
-    } else {
-      insumos.push({ id: Date.now(), nombre, emoji, unidad, stockMin, stockActual, categoria });
-    }
-    saveInsumos(); renderInventario();
-    document.getElementById('insumoModal').classList.remove('active');
-    notify(editingInsumoId ? 'Insumo actualizado' : '✅ Insumo agregado', 'success');
-    editingInsumoId = null;
-  });
-
-  document.getElementById('deleteInsumoBtn')?.addEventListener('click', () => {
-    if (editingInsumoId) eliminarInsumo(editingInsumoId);
-  });
-
   // ── Form factura ──────────────────────────
   document.getElementById('facturaForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -500,8 +463,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!facturaItemsTemp.length) { notify('Agrega al menos un item', 'warning'); return; }
 
     for (const it of facturaItemsTemp) {
-      if (!it.nombre || !it.nombre.trim()) { notify('Todos los items deben tener nombre o descripción', 'warning'); return; }
-      if (!it.precioUnitario) { notify(`"${it.nombre}" no tiene precio`, 'warning'); return; }
+      if (!it.nombre || !it.nombre.trim()) { notify('Todos los items deben tener nombre', 'warning'); return; }
+      if (!it.precioUnitario)              { notify(`"${it.nombre}" no tiene precio`, 'warning'); return; }
+      if (!it.cantidad || it.cantidad <= 0){ notify(`"${it.nombre}" necesita cantidad > 0`, 'warning'); return; }
     }
 
     facturaItemsTemp.forEach(it => { it.subtotal = (it.cantidad||0) * (it.precioUnitario||0); });
@@ -522,50 +486,37 @@ document.addEventListener('DOMContentLoaded', () => {
       facturas.push(fac);
     }
 
-    // ── Solo items que ingresan a inventario actualizan stock ──
+    // ── Sumar stock a los productos vinculados al catálogo ──
+    const prods = getProds();
+    let huboStock = false;
     facturaItemsTemp.forEach(it => {
-      if (it.ingresaInventario === false) return;
-      if (!it.insumoId) return;
-      const ins = insumos.find(i => i.id == it.insumoId);
-      if (ins) {
-        ins.stockActual = (parseFloat(ins.stockActual)||0) + parseFloat(it.cantidad);
-        const mov = {
-          id:           Date.now() + Math.random(),
-          insumoId:     ins.id,
-          insumoNombre: ins.nombre,
-          emoji:        ins.emoji,
-          unidad:       ins.unidad,
-          cantidad:     it.cantidad,
-          tipo:         'entrada',
-          motivo:       `Factura ${numero||fac.id} - ${proveedor}`,
-          fecha
-        };
-        movInventario.push(mov);
-        sheetsSync('movinv', mov);
-      }
-    });
+      if (!it.afectaStock || !it.prodId) return;   // "Otro gasto" → no afecta stock
+      const pIdx = prods.findIndex(p => p.id === it.prodId);
+      if (pIdx === -1) return;
+      const cantAntes = prods[pIdx].stock || 0;
+      prods[pIdx].stock = cantAntes + (it.cantidad || 0);
 
-    // ── Crear productos en catálogo para items marcados ──
-    facturaItemsTemp.forEach(it => {
-      if (!it.crearProducto || it.ingresaInventario !== false) return;
-      if (!it.nombre || !it.prodPrecio) return;
-      const prods = getProds();
-      const existe = prods.some(p => p.nombre.toLowerCase() === it.nombre.trim().toLowerCase());
-      if (!existe) {
-        const newProd = { id: Date.now() + Math.random(), nombre: it.nombre.trim(), emoji: it.prodEmoji||'🏷️', precio: it.prodPrecio };
-        prods.push(newProd);
-        saveProds(prods);
-        sheetsSync('producto', newProd);
-        if (typeof loadProdGrid === 'function') loadProdGrid();
-        if (typeof loadProdsManager === 'function') loadProdsManager();
-      }
+      const mov = {
+        id:         Date.now() + Math.random(),
+        prodId:     prods[pIdx].id,
+        prodNombre: prods[pIdx].nombre,
+        emoji:      prods[pIdx].emoji || '☕',
+        cantidad:   it.cantidad,
+        tipo:       'entrada',
+        motivo:     `Factura ${numero || fac.id} — ${proveedor}`,
+        fecha
+      };
+      stockMovs.push(mov);
+      sheetsSync('stockmov', mov);
+      huboStock = true;
     });
+    if (huboStock) { saveProds(prods); saveStockMovs(); }
 
     // ── Registrar egreso en cuenta ──
     const tx = {
       id:        Date.now() + 1,
       date:      fecha,
-      concept:   `Compra: ${proveedor}${numero?' FAC-'+numero:''}`,
+      concept:   `Compra: ${proveedor}${numero ? ' FAC-'+numero : ''}`,
       amount:    -total,
       type:      'egreso',
       esventa:   false,
@@ -578,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── También como gasto ──
     const gasto = {
       id:        Date.now() + 2,
-      concepto:  `Compra: ${proveedor}${numero?' FAC-'+numero:''}`,
+      concepto:  `Compra: ${proveedor}${numero ? ' FAC-'+numero : ''}`,
       monto:     total,
       categoria: 'Compras',
       cuenta,
@@ -587,10 +538,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     gastos.push(gasto);
 
-    saveFacturas(); saveInsumos(); saveMovInv(); saveAccounts(); saveGastos();
-    updateUI(); renderInventario(); loadTransactions();
+    saveFacturas(); saveAccounts(); saveGastos();
+    updateUI(); renderInventario(); loadTransactions(); loadProdGrid();
     if (typeof updateGastosList === 'function') updateGastosList();
-    if (typeof updateCajaHdr === 'function') updateCajaHdr();
+    if (typeof updateCajaHdr    === 'function') updateCajaHdr();
 
     document.getElementById('facturaModal').classList.remove('active');
     notify(`✅ Factura guardada · $${fmt(total)} registrado como gasto en ${accounts[cuenta]?.name||cuenta}`, 'success');

@@ -1,21 +1,36 @@
 /* ══════════════════════════════════════════
-   caja.js — Módulo de Caja / POS
+   caja.js — Módulo de Caja / POS  v3.0
+   ─────────────────────────────────────────
+   Cambio v3.0:
+   • _renderCobroStock lee p.stock directamente (no insumos vinculados).
+   • Muestra disponible/insuficiente por producto en el modal de cobro.
    ══════════════════════════════════════════ */
 
-let ordenActual = [];
-let selPayMethod = 'efectivo';
+let ordenActual      = [];
+let selPayMethod     = 'efectivo';
 let cobroEsPendiente = false;
 let cobroPendienteId = null;
-let _pendingOrdenSnapshot = null;
 
 function loadProdGrid() {
   const grid = document.getElementById('prodGrid');
   grid.innerHTML = '';
   getProds().forEach(p => {
+    const info     = _prodStockInfo(p);
+    const sinStock = info.limitado && info.stock <= 0;
+    const bajo     = info.limitado && info.stock > 0 && info.bajo;
+
     const b = document.createElement('div');
-    b.className = 'prod-btn';
-    b.innerHTML = `<div class="pe">${p.emoji || '☕'}</div><div class="pn">${p.nombre}</div><div class="pp">$ ${fmt(p.precio)}</div>`;
-    b.onclick = () => addToOrden(p);
+    b.className = 'prod-btn' + (sinStock ? ' prod-sin-stock' : '');
+    b.innerHTML = `
+      <div class="pe">${p.emoji || '☕'}</div>
+      <div class="pn">${p.nombre}</div>
+      <div class="pp">$ ${fmt(p.precio)}</div>
+      ${info.limitado
+        ? `<div class="pstock ${sinStock ? 'pstock-vacio' : bajo ? 'pstock-bajo' : 'pstock-ok'}">
+             ${sinStock ? 'Sin stock' : info.stock + ' und'}
+           </div>`
+        : ''}`;
+    if (!sinStock) b.onclick = () => addToOrden(p);
     grid.appendChild(b);
   });
 }
@@ -70,23 +85,22 @@ function limpiarOrden() {
 }
 
 function ventaManualRapida() {
-  const desc = document.getElementById('vmDesc').value.trim();
-  const monto = parseFloat(document.getElementById('vmMonto').value);
-  const cliente = document.getElementById('ordenCliente').value.trim();
+  const desc     = document.getElementById('vmDesc').value.trim();
+  const monto    = parseFloat(document.getElementById('vmMonto').value);
+  const cliente  = document.getElementById('ordenCliente').value.trim();
   const cuentaKey = document.getElementById('vmCuenta')?.value || 'efectivo';
   if (!desc || !monto) { notify('Ingresa descripción y monto', 'warning'); return; }
 
   const concepto = cliente ? `[${cliente}] ${desc}` : desc;
-  const tx = { id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: monto,
-               type: 'ingreso', esventa: true, cliente: cliente || null,
-               accKey: cuentaKey, accName: accounts[cuentaKey].name };
+  const tx = {
+    id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: monto,
+    type: 'ingreso', esventa: true, cliente: cliente || null,
+    accKey: cuentaKey, accName: accounts[cuentaKey].name
+  };
   accounts[cuentaKey].transactions.push(tx);
   saveAccounts();
-  updateUI();
-  updateCajaHdr();
-  updateVentasList();
-  loadTransactions();
-  document.getElementById('vmDesc').value = '';
+  updateUI(); updateCajaHdr(); updateVentasList(); loadTransactions();
+  document.getElementById('vmDesc').value  = '';
   document.getElementById('vmMonto').value = '';
   document.getElementById('ordenCliente').value = '';
   notify(`✅ Venta de $${fmt(monto)} registrada en ${accounts[cuentaKey].name}`, 'success');
@@ -114,48 +128,48 @@ function abrirCobro(esPendiente = false, pendId = null) {
   document.querySelector('.pmb[data-cuenta="efectivo"]').classList.add('sel');
   selPayMethod = 'efectivo';
 
-  // ── Mostrar resumen de stock en el modal ──────────────────────
+  // ── Mostrar resumen de stock disponible ───────────────────────
   _renderCobroStock();
 
   document.getElementById('cobroModal').classList.add('active');
 }
 
+// ── Stock disponible en el modal de cobro ─────────────────────────
+// Lee directamente p.stock del producto; no depende de insumos.
 function _renderCobroStock() {
-  // Eliminar sección previa si existe
   const prev = document.getElementById('cobroStockResumen');
   if (prev) prev.remove();
-
   if (!ordenActual.length) return;
 
-  // Solo mostrar si algún producto tiene insumos vinculados
+  // Solo mostrar si al menos un producto controla stock
   const itemsConStock = ordenActual.filter(it => {
-    const prod = getProds().find(p => p.id === it.id);
-    return prod && prod.insumos && prod.insumos.length > 0;
+    const p = getProds().find(x => x.id === it.id);
+    return p && p.stock !== null && p.stock !== undefined;
   });
-
   if (!itemsConStock.length) return;
 
   let hayProblema = false;
   const rows = ordenActual.map(it => {
-    const prod = getProds().find(p => p.id === it.id);
-    if (!prod || !prod.insumos || !prod.insumos.length) return null;
+    const p = getProds().find(x => x.id === it.id);
+    if (!p || p.stock === null || p.stock === undefined) return null;
 
-    const stockInfo = typeof _prodStockInfo === 'function' ? _prodStockInfo(prod) : null;
-    const disponible = stockInfo ? stockInfo.disponible : null;
-    const insuficiente = disponible !== null && disponible < it.qty;
+    const disponible    = p.stock || 0;
+    const insuficiente  = disponible < it.qty;
     if (insuficiente) hayProblema = true;
 
-    const color = disponible === null ? '#888'
-                : disponible <= 0     ? 'var(--err)'
-                : insuficiente        ? 'var(--warn)'
-                : 'var(--ok)';
-    const label = disponible === null ? ''
-                : disponible <= 0     ? '⚠️ Sin stock'
-                : insuficiente        ? `⚠️ Solo ${disponible} disponibles`
-                : `✅ Stock OK (${disponible} disp.)`;
+    const color = disponible <= 0
+      ? 'var(--err)'
+      : insuficiente
+        ? 'var(--warn)'
+        : 'var(--ok)';
+    const label = disponible <= 0
+      ? '🚫 Sin stock'
+      : insuficiente
+        ? `⚠️ Solo ${disponible} disponibles`
+        : `✅ ${disponible} disponibles`;
 
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--cream)">
-      <span style="font-size:.8rem">${prod.emoji||'☕'} ${prod.nombre} × ${it.qty}</span>
+      <span style="font-size:.8rem">${p.emoji||'☕'} ${p.nombre} × ${it.qty}</span>
       <span style="font-size:.78rem;font-weight:600;color:${color}">${label}</span>
     </div>`;
   }).filter(Boolean).join('');
@@ -172,12 +186,9 @@ function _renderCobroStock() {
     ${rows}
     ${hayProblema ? `<div style="font-size:.75rem;color:var(--warn);margin-top:6px"><i class="fas fa-exclamation-triangle"></i> Verifica el stock antes de confirmar</div>` : ''}`;
 
-  // Insertar antes de la sección de métodos de pago
-  const mbody = document.getElementById('cobroModal')?.querySelector('.mbody');
+  const mbody   = document.getElementById('cobroModal')?.querySelector('.mbody');
   const totalEl = document.getElementById('cobroTotal')?.parentElement;
-  if (mbody && totalEl) {
-    totalEl.insertAdjacentElement('afterend', section);
-  }
+  if (mbody && totalEl) totalEl.insertAdjacentElement('afterend', section);
 }
 
 function selPay(btn) {
@@ -197,29 +208,28 @@ function confirmarCobro() {
     pendientes = pendientes.filter(x => x.id !== cobroPendienteId);
     savePendientes(); updatePendientesList(); updatePendBadge();
   } else {
-    cliente = document.getElementById('ordenCliente').value.trim();
+    cliente  = document.getElementById('ordenCliente').value.trim();
     concepto = ordenActual.length ? ordenActual.map(i => `${i.qty}x ${i.nombre}`).join(', ') : 'Venta manual';
     if (cliente) concepto = `[${cliente}] ${concepto}`;
-    if (nota) concepto += ` (${nota})`;
+    if (nota)    concepto += ` (${nota})`;
     total = ordenActual.reduce((s,i) => s + i.precio * i.qty, 0);
     if (!total) { notify('Sin monto a cobrar', 'warning'); return; }
   }
 
-  const tx = { id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: total,
-               type: 'ingreso', esventa: true, cliente: cliente || null,
-               accKey: selPayMethod, accName: accounts[selPayMethod].name };
+  const tx = {
+    id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: total,
+    type: 'ingreso', esventa: true, cliente: cliente || null,
+    accKey: selPayMethod, accName: accounts[selPayMethod].name
+  };
   accounts[selPayMethod].transactions.push(tx);
 
-  // Descontar stock de insumos vinculados
+  // ── Descontar stock de productos vendidos ─────────────────────
   if (!cobroEsPendiente && ordenActual.length) {
     descontarStockPorVenta(ordenActual);
   }
 
   saveAccounts();
-  updateUI();
-  updateCajaHdr();
-  updateVentasList();
-  loadTransactions();
+  updateUI(); updateCajaHdr(); updateVentasList(); loadTransactions();
   document.getElementById('cobroModal').classList.remove('active');
   limpiarOrden();
   notify(`✅ $${fmt(total)} cobrado en ${accounts[selPayMethod].name}`, 'success');
@@ -234,13 +244,13 @@ function updateCajaHdr() {
       if (tx.date === today && tx.amount > 0 && tx.esventa) { v += tx.amount; cnt++; }
     });
   }
-  document.getElementById('ventasHoy').textContent = `$ ${fmt(v)}`;
-  document.getElementById('txHoy').textContent = cnt;
+  document.getElementById('ventasHoy').textContent    = `$ ${fmt(v)}`;
+  document.getElementById('txHoy').textContent        = cnt;
   document.getElementById('cajaPendCount').textContent = pendientes.length;
 }
 
 function updateVentasList() {
-  const list = document.getElementById('ventasList');
+  const list  = document.getElementById('ventasList');
   const today = fmtDateInput(new Date());
   let vs = [];
   for (const k in accounts) {
@@ -265,8 +275,6 @@ function updateVentasList() {
 
 function cerrarCaja() {
   const today = fmtDateInput(new Date());
-
-  // ── Calcular cifras del día ──────────────────────────────────────
   let tv = 0, cv = 0;
   const pc = {};
   for (const k in accounts) {
@@ -277,24 +285,22 @@ function cerrarCaja() {
       }
     });
   }
-  const todayGastos  = gastos.filter(g => g.fecha === today).reduce((s,g) => s + g.monto, 0);
-  const netoDia      = tv - todayGastos;
-  const pendCount    = pendientes.length;
-  const pendTotal    = pendientes.reduce((s,p) => s + p.total, 0);
-  const totCred      = creditos.reduce((s,c) => s + deudaRestante(c), 0);
-  const desglose     = Object.entries(pc).map(([n,v]) =>
+  const todayGastos = gastos.filter(g => g.fecha === today).reduce((s,g) => s + g.monto, 0);
+  const netoDia     = tv - todayGastos;
+  const pendCount   = pendientes.length;
+  const pendTotal   = pendientes.reduce((s,p) => s + p.total, 0);
+  const totCred     = creditos.reduce((s,c) => s + deudaRestante(c), 0);
+  const desglose    = Object.entries(pc).map(([n,v]) =>
     `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--cream)">
        <span>${n}</span><strong>$ ${fmt(v)}</strong>
      </div>`).join('');
 
-  // ── Paso 1: resumen + confirmación ──────────────────────────────
   document.getElementById('cierreCajaContent').innerHTML = `
     <div style="text-align:center;margin-bottom:16px">
       <div style="font-size:.75rem;color:#888">${new Date().toLocaleDateString('es-CO',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
       <div style="font-family:'Playfair Display',serif;font-size:2.2rem;font-weight:700;color:var(--cw);margin:8px 0">$ ${fmt(tv)}</div>
       <div style="font-size:.85rem;color:#888">${cv} venta${cv!==1?'s':''} · Neto <strong class="${netoDia>=0?'positive':'negative'}">$ ${fmt(netoDia)}</strong></div>
     </div>
-
     <div style="background:var(--latte);border-radius:var(--r);padding:13px;margin-bottom:12px">
       <div style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Por cuenta</div>
       ${desglose || '<p style="color:#bbb;text-align:center;font-size:.82rem">Sin ventas hoy</p>'}
@@ -302,7 +308,6 @@ function cerrarCaja() {
         <span>Gastos del día</span><span class="negative">- $ ${fmt(todayGastos)}</span>
       </div>
     </div>
-
     ${pendCount > 0 ? `
     <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:var(--r);padding:13px;margin-bottom:12px">
       <div style="font-size:.82rem;font-weight:600;color:#b8860b;margin-bottom:4px">
@@ -310,17 +315,13 @@ function cerrarCaja() {
       </div>
       <div style="font-size:.78rem;color:#888">Al confirmar el cierre pasarán automáticamente a <strong>Créditos</strong>.</div>
     </div>` : ''}
-
     ${totCred > 0 ? `
     <div style="background:var(--latte);border-radius:var(--r);padding:10px 13px;margin-bottom:12px;display:flex;justify-content:space-between">
       <span style="font-size:.82rem">Total créditos activos</span>
       <span class="negative" style="font-size:.82rem">$ ${fmt(totCred)}</span>
     </div>` : ''}
-
     <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn btn-s btn-full" onclick="document.getElementById('cierreCajaModal').classList.remove('active')">
-        Cancelar
-      </button>
+      <button class="btn btn-s btn-full" onclick="document.getElementById('cierreCajaModal').classList.remove('active')">Cancelar</button>
       <button class="btn btn-p btn-full" onclick="_cierrePaso2(${tv},${todayGastos},${netoDia})">
         <i class="fas fa-arrow-right"></i> Continuar
       </button>
@@ -330,16 +331,13 @@ function cerrarCaja() {
 }
 
 function _cierrePaso2(tv, todayGastos, netoDia) {
-  // Calcular saldo actual en efectivo para sugerir base
   const efectivoActual = accounts['efectivo']?.transactions.reduce((s,t) => s + t.amount, 0) || 0;
-
   document.getElementById('cierreCajaContent').innerHTML = `
     <div style="text-align:center;margin-bottom:20px">
       <div style="font-size:2rem;margin-bottom:6px">💵</div>
       <div style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--cw)">Base para mañana</div>
       <div style="font-size:.82rem;color:#888;margin-top:4px">¿Cuánto dinero en efectivo dejas en caja para el día siguiente?</div>
     </div>
-
     <div style="background:var(--latte);border-radius:var(--r);padding:12px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:4px">
         <span>Efectivo en caja ahora</span>
@@ -350,24 +348,15 @@ function _cierrePaso2(tv, todayGastos, netoDia) {
         <strong class="${netoDia>=0?'positive':'negative'}">$ ${fmt(netoDia)}</strong>
       </div>
     </div>
-
     <div class="fg" style="margin-bottom:16px">
       <label>Base de caja (Efectivo)</label>
       <input type="number" id="baseCajaInput" placeholder="0" min="0"
-             style="font-size:1.1rem;font-weight:600;text-align:center"
-             value="">
+             style="font-size:1.1rem;font-weight:600;text-align:center" value="">
     </div>
-
     <div style="display:flex;gap:8px">
-      <button class="btn btn-s btn-full" onclick="cerrarCaja()">
-        <i class="fas fa-arrow-left"></i> Volver
-      </button>
-      <button class="btn btn-ok btn-full" onclick="_confirmarCierre()">
-        <i class="fas fa-check"></i> Confirmar Cierre
-      </button>
+      <button class="btn btn-s btn-full" onclick="cerrarCaja()"><i class="fas fa-arrow-left"></i> Volver</button>
+      <button class="btn btn-ok btn-full" onclick="_confirmarCierre()"><i class="fas fa-check"></i> Confirmar Cierre</button>
     </div>`;
-
-  // Focus al input
   setTimeout(() => document.getElementById('baseCajaInput')?.focus(), 100);
 }
 
@@ -376,79 +365,52 @@ function _confirmarCierre() {
   const baseInput = document.getElementById('baseCajaInput');
   const base      = parseFloat(baseInput?.value) || 0;
 
-  // 1. Mover todos los pendientes a créditos
   let movidos = 0;
   pendientes.forEach(p => {
     creditos.push({
-      id:     Date.now() + movidos,
-      cliente: p.cliente,
-      deuda:   p.total,
-      desc:    `[Cierre ${today}] ${p.concepto}`,
-      fecha:   p.fecha,
-      pagos:   []
+      id: Date.now() + movidos, cliente: p.cliente, deuda: p.total,
+      desc: `[Cierre ${today}] ${p.concepto}`, fecha: p.fecha, pagos: []
     });
     sheetsSync('credito', creditos[creditos.length - 1]);
     movidos++;
   });
   const pendMovidos = pendientes.length;
   pendientes = [];
-  savePendientes();
-  saveCreditos();
+  savePendientes(); saveCreditos();
 
-  // 2. Registrar la base como transacción especial en efectivo
-  //    Tipo 'base_caja': ajusta el efectivo al monto indicado sin contar como ingreso
   if (base > 0) {
     const efectivoActual = accounts['efectivo'].transactions.reduce((s,t) => s + t.amount, 0);
-    // Solo registramos si hay diferencia, como ajuste de cierre
     const ajuste = base - efectivoActual;
     const txBase = {
-      id:       Date.now() + 999,
-      date:     today,
-      concept:  `Base caja día siguiente — $ ${fmt(base)}`,
-      amount:   ajuste,
-      type:     'base_caja',
-      esventa:  false,
-      accKey:   'efectivo',
-      accName:  'Efectivo'
+      id: Date.now() + 999, date: today,
+      concept: `Base caja día siguiente — $ ${fmt(base)}`,
+      amount: ajuste, type: 'base_caja', esventa: false,
+      accKey: 'efectivo', accName: 'Efectivo'
     };
     accounts['efectivo'].transactions.push(txBase);
     sheetsSync('transaccion', txBase);
   }
   saveAccounts();
+  updateUI(); updatePendientesList(); updatePendBadge();
+  updateCreditosList(); loadTransactions(); updateCajaHdr();
 
-  // 3. Actualizar UI
-  updateUI();
-  updatePendientesList();
-  updatePendBadge();
-  updateCreditosList();
-  loadTransactions();
-  updateCajaHdr();
-
-  // 4. Mostrar confirmación final
   document.getElementById('cierreCajaContent').innerHTML = `
     <div style="text-align:center;padding:10px 0 20px">
       <div style="font-size:3rem;margin-bottom:10px">✅</div>
-      <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--cw);margin-bottom:6px">
-        Cierre completado
-      </div>
+      <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--cw);margin-bottom:6px">Cierre completado</div>
       <div style="font-size:.85rem;color:#888">${new Date().toLocaleDateString('es-CO',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
     </div>
-
     <div style="background:var(--latte);border-radius:var(--r);padding:13px;margin-bottom:12px">
-      ${pendMovidos > 0 ? `
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--cream)">
+      ${pendMovidos > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--cream)">
         <span style="font-size:.82rem"><i class="fas fa-user-clock" style="color:var(--warn)"></i> Pendientes → Créditos</span>
         <strong style="font-size:.82rem">${pendMovidos} movido${pendMovidos!==1?'s':''}</strong>
       </div>` : ''}
-      ${base > 0 ? `
-      <div style="display:flex;justify-content:space-between;padding:6px 0">
+      ${base > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0">
         <span style="font-size:.82rem"><i class="fas fa-money-bill-wave" style="color:var(--ok)"></i> Base efectivo mañana</span>
         <strong style="font-size:.82rem" class="positive">$ ${fmt(base)}</strong>
       </div>` : ''}
     </div>
-
     <button class="btn btn-p btn-full" onclick="document.getElementById('cierreCajaModal').classList.remove('active')">
       <i class="fas fa-check"></i> Listo
     </button>`;
 }
-
