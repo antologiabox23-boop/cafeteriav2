@@ -11,7 +11,7 @@ const Sheets = (() => {
 
   // ─── CONFIGURACIÓN ─────────────────────────────────────────────
   // Pega aquí la URL de tu Web App después de desplegar Code.gs:
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxtsZWha3hZank-scvto_ZybmmztSm_oCCpJVHtW4njql0LurVb2epatjkaQt5ewNS6iA/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzdnCn_jFEn_ypaSJXTfLbDEn7weXQsyVw0oA1r7WY1nnsAooaIBGibCiirFo3tSb71dA/exec';
   // ───────────────────────────────────────────────────────────────
 
   const TIMEOUT_MS = 20000;
@@ -22,13 +22,15 @@ const Sheets = (() => {
   // Usa GET + payload base64 → evita CORS preflight completamente.
   // Apps Script permite GET desde cualquier origen sin configuración.
   async function _call(action, payload = {}) {
-    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbxtsZWha3hZank-scvto_ZybmmztSm_oCCpJVHtW4njql0LurVb2epatjkaQt5ewNS6iA/exec') {
+    if (!SCRIPT_URL || SCRIPT_URL === 'Phttps://script.google.com/macros/s/AKfycbzdnCn_jFEn_ypaSJXTfLbDEn7weXQsyVw0oA1r7WY1nnsAooaIBGibCiirFo3tSb71dA/exec') {
       throw new Error('⚙️ Configura SCRIPT_URL en js/sheets.js');
     }
 
-    const encoded = encodeURIComponent(
-      btoa(unescape(encodeURIComponent(JSON.stringify(payload))))
-    );
+    // Codificar payload a base64 UTF-8 usando TextEncoder (soporta todos los caracteres)
+    const jsonStr = JSON.stringify(payload);
+    const bytes   = new TextEncoder().encode(jsonStr);
+    const b64     = btoa(String.fromCharCode(...bytes));
+    const encoded = encodeURIComponent(b64);
     const url = `${SCRIPT_URL}?action=${action}&payload=${encoded}`;
 
     const ctrl    = new AbortController();
@@ -90,7 +92,7 @@ const Sheets = (() => {
   // Descarga todo desde Sheets, aplica al estado global y refresca UI.
   // silent=true se usa para el auto-sync al inicio (sin notificaciones molestas).
   async function loadAll(silent = false) {
-    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbxtsZWha3hZank-scvto_ZybmmztSm_oCCpJVHtW4njql0LurVb2epatjkaQt5ewNS6iA/exec') return;
+    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzdnCn_jFEn_ypaSJXTfLbDEn7weXQsyVw0oA1r7WY1nnsAooaIBGibCiirFo3tSb71dA/exec') return;
     if (_syncing) return;
     _syncing = true;
     _setSyncLabel('Descargando desde Sheets…');
@@ -134,7 +136,7 @@ const Sheets = (() => {
   // ─── PUSH COMPLETO → SHEETS ────────────────────────────────────
   // Sobrescribe todo el estado local en Sheets. Sincronización manual.
   async function pushAll() {
-    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbxtsZWha3hZank-scvto_ZybmmztSm_oCCpJVHtW4njql0LurVb2epatjkaQt5ewNS6iA/exec') {
+    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzdnCn_jFEn_ypaSJXTfLbDEn7weXQsyVw0oA1r7WY1nnsAooaIBGibCiirFo3tSb71dA/exec') {
       notify('Configura SCRIPT_URL en js/sheets.js', 'warning'); return;
     }
     _setSyncLabel('Enviando a Sheets…');
@@ -155,19 +157,19 @@ const Sheets = (() => {
   // próximo pushAll() lo corregirá.
 
   function appendRow(sheet, row) {
-    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbxtsZWha3hZank-scvto_ZybmmztSm_oCCpJVHtW4njql0LurVb2epatjkaQt5ewNS6iA/exec') return;
+    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzdnCn_jFEn_ypaSJXTfLbDEn7weXQsyVw0oA1r7WY1nnsAooaIBGibCiirFo3tSb71dA/exec') return;
     _call('addRow', { sheet, row })
       .catch(err => console.warn(`[Sheets.appendRow:${sheet}]`, err.message));
   }
 
   function updateRow(sheet, id, data) {
-    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbxtsZWha3hZank-scvto_ZybmmztSm_oCCpJVHtW4njql0LurVb2epatjkaQt5ewNS6iA/exec') return;
+    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzdnCn_jFEn_ypaSJXTfLbDEn7weXQsyVw0oA1r7WY1nnsAooaIBGibCiirFo3tSb71dA/exec') return;
     _call('updateRow', { sheet, id, data })
       .catch(err => console.warn(`[Sheets.updateRow:${sheet}]`, err.message));
   }
 
   function deleteRow(sheet, id) {
-    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbxtsZWha3hZank-scvto_ZybmmztSm_oCCpJVHtW4njql0LurVb2epatjkaQt5ewNS6iA/exec') return;
+    if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzdnCn_jFEn_ypaSJXTfLbDEn7weXQsyVw0oA1r7WY1nnsAooaIBGibCiirFo3tSb71dA/exec') return;
     _call('deleteRow', { sheet, id })
       .catch(err => console.warn(`[Sheets.deleteRow:${sheet}]`, err.message));
   }
