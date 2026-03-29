@@ -120,7 +120,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const updatedTx = { id: currentEditId, date, concept, amount: signedAmount, type,
                             accKey: k, accName: accounts[k].name };
         accounts[k].transactions.push(updatedTx);
-        // Sheets: eliminar fila vieja y agregar la actualizada
         Sheets.deleteRow(Sheets.HOJAS.TRANSACCIONES, currentEditId);
         sheetsSync('transaccion', updatedTx);
       }

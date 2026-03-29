@@ -73,11 +73,14 @@ function ventaManualRapida() {
   const desc = document.getElementById('vmDesc').value.trim();
   const monto = parseFloat(document.getElementById('vmMonto').value);
   const cliente = document.getElementById('ordenCliente').value.trim();
+  const cuentaKey = document.getElementById('vmCuenta')?.value || 'efectivo';
   if (!desc || !monto) { notify('Ingresa descripción y monto', 'warning'); return; }
 
   const concepto = cliente ? `[${cliente}] ${desc}` : desc;
-  const tx = { id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: monto, type: 'ingreso', esventa: true, cliente: cliente || null };
-  accounts['efectivo'].transactions.push(tx);
+  const tx = { id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: monto,
+               type: 'ingreso', esventa: true, cliente: cliente || null,
+               accKey: cuentaKey, accName: accounts[cuentaKey].name };
+  accounts[cuentaKey].transactions.push(tx);
   saveAccounts();
   updateUI();
   updateCajaHdr();
@@ -86,7 +89,7 @@ function ventaManualRapida() {
   document.getElementById('vmDesc').value = '';
   document.getElementById('vmMonto').value = '';
   document.getElementById('ordenCliente').value = '';
-  notify(`✅ Venta de $${fmt(monto)} registrada`, 'success');
+  notify(`✅ Venta de $${fmt(monto)} registrada en ${accounts[cuentaKey].name}`, 'success');
   sheetsSync('venta', tx);
 }
 
@@ -138,7 +141,9 @@ function confirmarCobro() {
     if (!total) { notify('Sin monto a cobrar', 'warning'); return; }
   }
 
-  const tx = { id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: total, type: 'ingreso', esventa: true, cliente: cliente || null };
+  const tx = { id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: total,
+               type: 'ingreso', esventa: true, cliente: cliente || null,
+               accKey: selPayMethod, accName: accounts[selPayMethod].name };
   accounts[selPayMethod].transactions.push(tx);
   saveAccounts();
   updateUI();

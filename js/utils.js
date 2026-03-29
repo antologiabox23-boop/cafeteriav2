@@ -3,7 +3,8 @@
    ══════════════════════════════════════════ */
 
 function fmt(n) {
-  return Math.abs(n).toLocaleString('es-CO');
+  const abs = Math.abs(n).toLocaleString('es-CO');
+  return n < 0 ? `-${abs}` : abs;
 }
 
 function parseDateStr(ds) {

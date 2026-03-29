@@ -58,7 +58,9 @@ function load() {
 }
 
 // ─── Guardar en localStorage ─────────────────────────────────────
-function saveAccounts()   { localStorage.setItem(LS.accounts, JSON.stringify(accounts)); }
+function saveAccounts()   {
+  localStorage.setItem(LS.accounts, JSON.stringify(accounts));
+}
 function saveGastos()     { localStorage.setItem(LS.gastos,   JSON.stringify(gastos)); }
 function saveCreditos()   { localStorage.setItem(LS.creditos, JSON.stringify(creditos)); }
 function savePendientes() { localStorage.setItem(LS.pend,     JSON.stringify(pendientes)); }
@@ -82,28 +84,50 @@ function exportAllData() {
   };
 }
 
+// ─── Importar todo (desde loadAll) ───────────────────────────────
+// Sobreescribe el estado en memoria Y localStorage.
+function importAllData(data) {
+  if (!data) return;
+  if (data.accounts) {
+    // Preservar la estructura base de cuentas si el servidor devuelve algo parcial
+    const base = { efectivo:{name:'Efectivo',color:'efectivo'}, nequi:{name:'Nequi',color:'nequi'},
+                   bancolombia:{name:'Bancolombia',color:'bancolombia'}, daviplata:{name:'Daviplata',color:'daviplata'} };
+    for (const k in base) {
+      if (!data.accounts[k]) data.accounts[k] = { ...base[k], transactions:[], balance:0 };
+      else data.accounts[k] = { ...base[k], ...data.accounts[k] };
+    }
+    accounts = data.accounts;
+    saveAccounts();
+  }
+  if (data.gastos)        { gastos        = data.gastos;        saveGastos(); }
+  if (data.creditos)      { creditos      = data.creditos;      saveCreditos(); }
+  if (data.pendientes)    { pendientes    = data.pendientes;    savePendientes(); }
+  if (data.insumos)       { insumos       = data.insumos;       saveInsumos(); }
+  if (data.facturas)      { facturas      = data.facturas;      saveFacturas(); }
+  if (data.movInventario) { movInventario = data.movInventario; saveMovInv(); }
+  if (data.productos)     { saveProds(data.productos); }
+}
+
 // ─── Sync optimista a Sheets (llamado por cada módulo al guardar) ─
-// tipo: 'venta' | 'gasto' | 'factura' | 'transaccion' | 'credito' |
-//        'pendiente' | 'insumo' | 'movinv' | 'producto'
 function sheetsSync(tipo, obj) {
   try {
     switch (tipo) {
       case 'venta':
       case 'transaccion':
         if (obj && obj.id) {
-          const accKey = obj.accKey || obj.cuentaKey || null;
+          const accKey = obj.accKey || obj.cuentaKey || '';
           const row = {
-            cuenta:     obj.accName  || (accKey ? accounts[accKey]?.name : '') || '',
-            cuentaKey:  obj.accKey   || obj.cuentaKey || '',
-            id:         obj.id,
-            date:       obj.date,
-            concept:    obj.concept,
-            amount:     obj.amount,
-            type:       obj.type || (obj.amount >= 0 ? 'ingreso' : 'egreso'),
-            esventa:    obj.esventa ? 'SI' : 'NO',
-            cliente:    obj.cliente    || '',
-            facturaId:  obj.facturaId  || '',
-            gastoId:    obj.gastoId    || ''
+            cuenta:    obj.accName   || (accKey && accounts[accKey] ? accounts[accKey].name : '') || '',
+            cuentaKey: accKey,
+            id:        obj.id,
+            date:      obj.date,
+            concept:   obj.concept,
+            amount:    obj.amount,
+            type:      obj.type || (obj.amount >= 0 ? 'ingreso' : 'egreso'),
+            esventa:   obj.esventa ? 'SI' : 'NO',
+            cliente:   obj.cliente    || '',
+            facturaId: obj.facturaId  || '',
+            gastoId:   obj.gastoId    || ''
           };
           Sheets.appendRow(Sheets.HOJAS.TRANSACCIONES, row);
         }
@@ -133,28 +157,4 @@ function sheetsSync(tipo, obj) {
   } catch (e) {
     console.warn('[sheetsSync]', tipo, e.message);
   }
-}
-
-// ─── Importar todo (desde loadAll) ───────────────────────────────
-// Sobreescribe el estado en memoria Y localStorage.
-function importAllData(data) {
-  if (!data) return;
-  if (data.accounts) {
-    // Preservar la estructura base de cuentas si el servidor devuelve algo parcial
-    const base = { efectivo:{name:'Efectivo',color:'efectivo'}, nequi:{name:'Nequi',color:'nequi'},
-                   bancolombia:{name:'Bancolombia',color:'bancolombia'}, daviplata:{name:'Daviplata',color:'daviplata'} };
-    for (const k in base) {
-      if (!data.accounts[k]) data.accounts[k] = { ...base[k], transactions:[], balance:0 };
-      else data.accounts[k] = { ...base[k], ...data.accounts[k] };
-    }
-    accounts = data.accounts;
-    saveAccounts();
-  }
-  if (data.gastos)        { gastos        = data.gastos;        saveGastos(); }
-  if (data.creditos)      { creditos      = data.creditos;      saveCreditos(); }
-  if (data.pendientes)    { pendientes    = data.pendientes;    savePendientes(); }
-  if (data.insumos)       { insumos       = data.insumos;       saveInsumos(); }
-  if (data.facturas)      { facturas      = data.facturas;      saveFacturas(); }
-  if (data.movInventario) { movInventario = data.movInventario; saveMovInv(); }
-  if (data.productos)     { saveProds(data.productos); }
 }

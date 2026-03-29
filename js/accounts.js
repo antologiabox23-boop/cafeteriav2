@@ -14,7 +14,11 @@ function updateUI() {
       el.className = 'acc-bal ' + (bal >= 0 ? 'positive' : 'negative');
     }
   }
-  document.getElementById('totalGeneral').textContent = `$ ${fmt(total)}`;
+  const totalEl = document.getElementById('totalGeneral');
+  if (totalEl) {
+    totalEl.textContent = `$ ${fmt(total)}`;
+    totalEl.className = 'total-amt ' + (total >= 0 ? '' : 'negative');
+  }
 }
 
 function loadAccountsTab() {
