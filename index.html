@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Antología Box 23 - Caja</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<!-- ══ HEADER ══ -->
+<header>
+  <div class="hinner">
+    <div class="brand">
+      <div class="logo-img" style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,#00897b,#00695c);display:flex;align-items:center;justify-content:center;font-size:1.6rem;border:2px solid var(--gold)">☕</div>
+      <div>
+        <div class="app-name">Antología Box 23</div>
+        <div class="app-sub">Sistema de Caja</div>
+      </div>
+    </div>
+    <div class="total-pill">
+      <div class="total-lbl">Saldo Total</div>
+      <div class="total-amt" id="totalGeneral">$ 0</div>
+    </div>
+  </div>
+</header>
+
+<!-- ══ NAV ══ -->
+<div class="nav-wrap">
+  <div class="nav-tabs">
+    <div class="nav-tab active" data-tab="caja"><i class="fas fa-cash-register"></i>Caja</div>
+    <div class="nav-tab" data-tab="pendientes"><i class="fas fa-clock"></i>Pendientes <span class="badge bw" id="pendBadge" style="display:none">0</span></div>
+    <div class="nav-tab" data-tab="creditos"><i class="fas fa-user-clock"></i>Créditos</div>
+    <div class="nav-tab" data-tab="gastos"><i class="fas fa-receipt"></i>Gastos</div>
+    <div class="nav-tab" data-tab="inventario"><i class="fas fa-boxes"></i>Inventario</div>
+    <div class="nav-tab" data-tab="resumen"><i class="fas fa-chart-pie"></i>Resumen</div>
+    <div class="nav-tab" data-tab="transacciones"><i class="fas fa-exchange-alt"></i>Movimientos</div>
+    <div class="nav-tab" data-tab="productos"><i class="fas fa-coffee"></i>Productos</div>
+    <div class="nav-tab" data-tab="cuentas"><i class="fas fa-wallet"></i>Cuentas</div>
+    <div class="nav-tab" data-tab="respaldos"><i class="fas fa-database"></i>Datos</div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ══════════ CAJA ══════════ -->
+<div class="tab-content active" id="caja">
+  <div class="caja-hdr">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <h2><i class="fas fa-cash-register"></i> Caja del Día</h2>
+        <div id="cajaDate" style="font-size:.75rem;opacity:.85;margin-top:3px"></div>
+      </div>
+      <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:white;border:1px solid rgba(255,255,255,.3)" onclick="cerrarCaja()"><i class="fas fa-chart-bar"></i> Cierre</button>
+    </div>
+    <div class="caja-stats">
+      <div class="caja-stat"><div class="csl">Ventas Hoy</div><div class="csv" id="ventasHoy">$ 0</div></div>
+      <div class="caja-stat"><div class="csl">Transacciones</div><div class="csv" id="txHoy">0</div></div>
+      <div class="caja-stat"><div class="csl">Pendientes</div><div class="csv" id="cajaPendCount">0</div></div>
+    </div>
+  </div>
+
+  <div class="stitle"><i class="fas fa-th"></i> Productos Rápidos</div>
+  <div class="prod-grid" id="prodGrid"></div>
+
+  <div class="orden" id="ordenPanel">
+    <div class="stitle" style="margin-bottom:10px"><i class="fas fa-shopping-cart"></i> Pedido Actual</div>
+    <div class="cliente-orden-row">
+      <i class="fas fa-user" style="color:var(--cw)"></i>
+      <input type="text" id="ordenCliente" placeholder="Nombre cliente (opcional)" list="clientesSuggestions" autocomplete="off">
+      <datalist id="clientesSuggestions"></datalist>
+    </div>
+    <div class="orden-items" id="ordenItems">
+      <div class="empty" style="padding:18px"><i class="fas fa-coffee" style="font-size:1.6rem;color:var(--cw)"></i><p style="color:#bbb;margin-top:6px;font-size:.82rem">Selecciona productos</p></div>
+    </div>
+    <div class="orden-total-row">
+      <span class="otl">Total</span>
+      <span class="otv" id="ordenTotal">$ 0</span>
+    </div>
+    <div class="cobrar-row" style="margin-top:10px">
+      <button class="btn btn-ok" onclick="guardarPendiente()"><i class="fas fa-clock"></i> Pendiente</button>
+      <button class="btn btn-cobrar" onclick="abrirCobro()"><i class="fas fa-check-circle"></i> Cobrar</button>
+    </div>
+    <button class="btn btn-s btn-full" style="margin-top:8px;font-size:.78rem" onclick="limpiarOrden()"><i class="fas fa-times"></i> Limpiar pedido</button>
+  </div>
+
+  <div class="rv-panel">
+    <div class="stitle" style="margin-bottom:10px"><i class="fas fa-bolt"></i> Venta Manual Rápida</div>
+    <div class="rv-inputs">
+      <div class="fg" style="margin:0"><label>Descripción</label><input type="text" id="vmDesc" placeholder="Ej: Café para llevar"></div>
+      <div class="fg" style="margin:0"><label>Monto ($)</label><input type="number" id="vmMonto" placeholder="0" min="0"></div>
+    </div>
+    <button class="btn btn-p btn-full" style="margin-top:10px" onclick="ventaManualRapida()"><i class="fas fa-plus"></i> Registrar Venta</button>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;">
+    <div class="stitle" style="margin:0"><i class="fas fa-receipt"></i> Ventas del Día</div>
+  </div>
+  <div id="ventasList" class="vlist">
+    <div class="empty"><i class="fas fa-coffee"></i><h3>Sin ventas hoy</h3></div>
+  </div>
+</div>
+
+<!-- ══════════ PENDIENTES ══════════ -->
+<div class="tab-content" id="pendientes">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="stitle" style="margin:0"><i class="fas fa-clock"></i> Ventas Pendientes de Pago</div>
+  </div>
+  <div id="pendientesList"></div>
+</div>
+
+<!-- ══════════ CRÉDITOS ══════════ -->
+<div class="tab-content" id="creditos">
+  <div id="creditoSummary"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="stitle" style="margin:0"><i class="fas fa-user-clock"></i> Clientes con Crédito</div>
+    <button class="btn btn-p btn-sm" onclick="abrirNuevoCredito()"><i class="fas fa-plus"></i> Nuevo</button>
+  </div>
+  <div id="creditosList"></div>
+</div>
+
+<!-- ══════════ GASTOS ══════════ -->
+<div class="tab-content" id="gastos">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="stitle" style="margin:0"><i class="fas fa-receipt"></i> Gastos del Día</div>
+    <button class="btn btn-d btn-sm" onclick="abrirGastoModal()"><i class="fas fa-plus"></i> Nuevo Gasto</button>
+  </div>
+  <div id="gastosDia" class="msum" style="margin-bottom:14px;">
+    <div class="scard"><div class="slbl">Total Hoy</div><div class="sval negative" id="gastosTotalHoy">$ 0</div></div>
+    <div class="scard"><div class="slbl">Este Mes</div><div class="sval negative" id="gastosTotalMes">$ 0</div></div>
+    <div class="scard"><div class="slbl">Cantidad</div><div class="sval" id="gastosCount">0</div></div>
+  </div>
+  <div id="gastosList"></div>
+</div>
+
+<!-- ══════════ INVENTARIO ══════════ -->
+<div class="tab-content" id="inventario">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="stitle" style="margin:0"><i class="fas fa-boxes"></i> Inventario</div>
+    <div style="display:flex;gap:7px">
+      <button class="btn btn-p btn-sm" onclick="abrirFacturaModal()"><i class="fas fa-file-invoice"></i> Nueva Factura</button>
+      <button class="btn btn-i btn-sm" onclick="abrirInsumoModal()"><i class="fas fa-plus"></i> Insumo</button>
+    </div>
+  </div>
+
+  <!-- Resumen stock -->
+  <div class="msum" style="margin-bottom:14px">
+    <div class="scard"><div class="slbl">Insumos</div><div class="sval" id="invTotalInsumos">0</div></div>
+    <div class="scard"><div class="slbl">Stock Bajo</div><div class="sval negative" id="invStockBajo">0</div></div>
+    <div class="scard"><div class="slbl">Facturas</div><div class="sval" id="invTotalFacturas">0</div></div>
+  </div>
+
+  <!-- Alertas stock bajo -->
+  <div id="invAlertas"></div>
+
+  <!-- Tabs internas inventario -->
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <button class="fbtn active" onclick="switchInvTab('stock',this)"><i class="fas fa-layer-group"></i> Stock Actual</button>
+    <button class="fbtn" onclick="switchInvTab('facturas',this)"><i class="fas fa-file-invoice-dollar"></i> Facturas</button>
+    <button class="fbtn" onclick="switchInvTab('movimientos',this)"><i class="fas fa-history"></i> Movimientos</button>
+  </div>
+
+  <div id="invStock"></div>
+  <div id="invFacturas" style="display:none"></div>
+  <div id="invMovimientos" style="display:none"></div>
+</div>
+
+<!-- ══════════ RESUMEN ══════════ -->
+<div class="tab-content" id="resumen">
+  <div class="account-cards">
+    <div class="account-card nequi" data-account="nequi">
+      <div class="acc-icon" style="background:#ede9fe"><i class="fas fa-mobile-alt" style="color:#7c3aed"></i></div>
+      <div class="acc-name">Nequi</div><div class="acc-bal positive" id="nequiBalance">$ 0</div>
+    </div>
+    <div class="account-card bancolombia" data-account="bancolombia">
+      <div class="acc-icon" style="background:#e0f2fe"><i class="fas fa-university" style="color:#0284c7"></i></div>
+      <div class="acc-name">Bancolombia</div><div class="acc-bal positive" id="bancolombiaBalance">$ 0</div>
+    </div>
+    <div class="account-card daviplata" data-account="daviplata">
+      <div class="acc-icon" style="background:#d1fae5"><i class="fas fa-wallet" style="color:#059669"></i></div>
+      <div class="acc-name">Daviplata</div><div class="acc-bal positive" id="daviplataBalance">$ 0</div>
+    </div>
+    <div class="account-card efectivo" data-account="efectivo">
+      <div class="acc-icon" style="background:#fef3c7"><i class="fas fa-money-bill-wave" style="color:#d97706"></i></div>
+      <div class="acc-name">Efectivo</div><div class="acc-bal positive" id="efectivoBalance">$ 0</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MOVIMIENTOS ══════════ -->
+<div class="tab-content" id="transacciones">
+  <div class="mfilter">
+    <div class="mnav">
+      <button class="mbtn" id="prevMonthBtn"><i class="fas fa-chevron-left"></i></button>
+      <div class="cmonth" id="currentMonthDisplay">Enero 2024</div>
+      <button class="mbtn" id="nextMonthBtn"><i class="fas fa-chevron-right"></i></button>
+    </div>
+    <div class="fopts">
+      <button class="fbtn" data-filter="all">Todas</button>
+      <button class="fbtn active" data-filter="current">Mes</button>
+    </div>
+  </div>
+  <div class="msum" id="monthSummary" style="display:none;">
+    <div class="scard"><div class="slbl">Neto</div><div class="sval positive" id="monthTotal">$ 0</div></div>
+    <div class="scard"><div class="slbl">Ingresos</div><div class="sval positive" id="monthIncome">$ 0</div></div>
+    <div class="scard"><div class="slbl">Egresos</div><div class="sval negative" id="monthExpense">$ 0</div></div>
+  </div>
+  <div id="transactionsList" class="vlist">
+    <div class="empty"><i class="fas fa-exchange-alt"></i><h3>Sin movimientos</h3></div>
+  </div>
+</div>
+
+<!-- ══════════ PRODUCTOS ══════════ -->
+<div class="tab-content" id="productos">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="stitle" style="margin:0"><i class="fas fa-coffee"></i> Catálogo</div>
+    <button class="btn btn-p btn-sm" onclick="abrirProdModal()"><i class="fas fa-plus"></i> Nuevo</button>
+  </div>
+  <div id="productsList"></div>
+</div>
+
+<!-- ══════════ CUENTAS ══════════ -->
+<div class="tab-content" id="cuentas">
+  <div id="accountsList"></div>
+</div>
+
+<!-- ══════════ RESPALDOS / DATOS ══════════ -->
+<div class="tab-content" id="respaldos">
+  <!-- Configuración Google Sheets -->
+  <div class="bkup" style="border-left:4px solid var(--gold)">
+    <h3><i class="fab fa-google" style="color:#4285F4"></i> Google Sheets (Apps Script)</h3>
+    <p style="font-size:.82rem;color:#888;margin-bottom:12px">Conecta tu Apps Script Web App para sincronizar datos en la nube.</p>
+    <div class="fg"><label>URL del Web App (Apps Script)</label>
+      <input type="url" id="gsUrl" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:.8rem">
+    </div>
+    <div class="fbtns" style="margin-top:8px">
+      <button class="btn btn-s btn-sm" onclick="testGSConnection()"><i class="fas fa-plug"></i> Probar Conexión</button>
+      <button class="btn btn-p btn-sm" onclick="saveGSUrl()"><i class="fas fa-save"></i> Guardar URL</button>
+    </div>
+    <div id="gsStatus" style="margin-top:8px;font-size:.8rem"></div>
+  </div>
+
+  <!-- Sincronización -->
+  <div class="bkup">
+    <h3><i class="fas fa-sync"></i> Sincronización</h3>
+    <p style="font-size:.82rem;color:#888;margin-bottom:12px">Envía o recibe datos desde Google Sheets.</p>
+    <div style="display:flex;gap:9px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="syncToSheets()"><i class="fas fa-cloud-upload-alt"></i> Enviar a Sheets</button>
+      <button class="btn btn-i" onclick="syncFromSheets()"><i class="fas fa-cloud-download-alt"></i> Traer de Sheets</button>
+    </div>
+    <div id="syncStatus" style="margin-top:8px;font-size:.8rem;color:#888"></div>
+  </div>
+
+  <!-- Backup local -->
+  <div class="bkup">
+    <h3><i class="fas fa-download"></i> Backup Local (CSV)</h3>
+    <p style="font-size:.82rem;color:#888;margin-bottom:12px">Descarga un respaldo local de tus datos.</p>
+    <div class="bkup-opts">
+      <button class="btn btn-p" onclick="downloadBackup()"><i class="fas fa-file-csv"></i> Descargar CSV</button>
+    </div>
+  </div>
+  <div class="bkup">
+    <h3><i class="fas fa-upload"></i> Importar CSV</h3>
+    <input type="file" id="backupFile" accept=".csv" style="display:none;">
+    <button class="btn btn-s" onclick="document.getElementById('backupFile').click()"><i class="fas fa-folder-open"></i> Seleccionar Archivo</button>
+    <div class="file-info" id="fileInfo" style="display:none;margin-top:9px;font-size:.8rem;"><i class="fas fa-file"></i> <span id="fileName"></span></div>
+    <div class="fbtns"><button class="btn btn-s" onclick="clearFileInput()">Cancelar</button><button class="btn btn-p" onclick="importFromFile()" id="importBtn" disabled>Importar</button></div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- FABs -->
+<button class="fab fab-main" id="addTransactionBtn" title="Nueva Transacción"><i class="fas fa-plus"></i></button>
+
+<!-- ══ MODAL TRANSACCIÓN ══ -->
+<div class="modal" id="transactionModal">
+  <div class="mc">
+    <div class="mhdr"><h2 id="modalTitle">Nueva Transacción</h2><i class="fas fa-times close-modal"></i></div>
+    <div class="mbody">
+      <form id="transactionForm">
+        <input type="hidden" id="transactionId"><input type="hidden" id="originalAccount">
+        <div class="frow">
+          <div class="fg"><label>Cuenta</label>
+            <select id="account" required>
+              <option value="">Seleccionar</option>
+              <option value="efectivo">💵 Efectivo</option>
+              <option value="nequi">📱 Nequi</option>
+              <option value="bancolombia">🏦 Bancolombia</option>
+              <option value="daviplata">💳 Daviplata</option>
+            </select>
+          </div>
+          <div class="fg"><label>Tipo</label>
+            <select id="type" required>
+              <option value="ingreso">📈 Ingreso</option>
+              <option value="egreso">📉 Egreso</option>
+            </select>
+          </div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Monto ($)</label><input type="number" id="amount" placeholder="0" min="0" required></div>
+          <div class="fg"><label>Fecha</label><input type="date" id="date" required></div>
+        </div>
+        <div class="fg"><label>Concepto</label><input type="text" id="concept" placeholder="Ej: Venta café americano" required></div>
+        <div class="fbtns">
+          <button type="button" class="btn btn-s close-modal">Cancelar</button>
+          <button type="button" class="btn btn-d btn-sm" id="deleteTransactionBtn" style="display:none;"><i class="fas fa-trash"></i></button>
+          <button type="submit" class="btn btn-p" id="submitTransactionBtn">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL COBRO ══ -->
+<div class="modal" id="cobroModal">
+  <div class="mc">
+    <div class="mhdr"><h2>💳 Cobrar Pedido</h2><button class="cbtn" onclick="document.getElementById('cobroModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
+    <div class="mbody">
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:.75rem;color:#888;margin-bottom:3px;">Total a cobrar</div>
+        <div id="cobroTotal" style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--cw);"></div>
+      </div>
+      <div class="stitle" style="font-size:.86rem;"><i class="fas fa-credit-card"></i> Método de pago</div>
+      <div class="pmethods">
+        <button class="pmb sel" data-cuenta="efectivo" onclick="selPay(this)"><i class="fas fa-money-bill-wave" style="color:#d97706"></i>Efectivo</button>
+        <button class="pmb" data-cuenta="nequi" onclick="selPay(this)"><i class="fas fa-mobile-alt" style="color:#7c3aed"></i>Nequi</button>
+        <button class="pmb" data-cuenta="bancolombia" onclick="selPay(this)"><i class="fas fa-university" style="color:#0284c7"></i>Bancolombia</button>
+        <button class="pmb" data-cuenta="daviplata" onclick="selPay(this)"><i class="fas fa-wallet" style="color:#059669"></i>Daviplata</button>
+      </div>
+      <div class="fg"><label>Nota (opcional)</label><input type="text" id="cobroNota" placeholder="Ej: Cliente frecuente"></div>
+      <button class="btn btn-ok btn-full" style="margin-top:8px;padding:15px;font-size:.95rem;" onclick="confirmarCobro()"><i class="fas fa-check-circle"></i> Confirmar Cobro</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL CIERRE CAJA ══ -->
+<div class="modal" id="cierreCajaModal">
+  <div class="mc">
+    <div class="mhdr"><h2>📊 Cierre de Caja</h2><button class="cbtn" onclick="document.getElementById('cierreCajaModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
+    <div class="mbody" id="cierreCajaContent"></div>
+  </div>
+</div>
+
+<!-- ══ MODAL PRODUCTO ══ -->
+<div class="modal" id="prodModal">
+  <div class="mc">
+    <div class="mhdr"><h2 id="prodModalTitle">Nuevo Producto</h2><i class="fas fa-times" onclick="document.getElementById('prodModal').classList.remove('active')" style="cursor:pointer;color:var(--steam)"></i></div>
+    <div class="mbody">
+      <form id="prodForm">
+        <input type="hidden" id="prodId">
+        <div class="frow">
+          <div class="fg"><label>Emoji</label><input type="text" id="prodEmoji" placeholder="☕" maxlength="4"></div>
+          <div class="fg"><label>Precio ($)</label><input type="number" id="prodPrecio" placeholder="0" min="0" required></div>
+        </div>
+        <div class="fg"><label>Nombre</label><input type="text" id="prodNombre" placeholder="Ej: Café Americano" required></div>
+        <div class="fbtns">
+          <button type="button" class="btn btn-s" onclick="document.getElementById('prodModal').classList.remove('active')">Cancelar</button>
+          <button type="button" class="btn btn-d btn-sm" id="deleteProdBtn" style="display:none;" onclick="eliminarProd()"><i class="fas fa-trash"></i></button>
+          <button type="submit" class="btn btn-p">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL DETALLE CUENTA ══ -->
+<div class="modal" id="acctDetailModal">
+  <div class="mc">
+    <div class="mhdr"><h2 id="adName">Cuenta</h2><button class="cbtn" id="closeAcctDetail"><i class="fas fa-times"></i></button></div>
+    <div class="mbody">
+      <div class="astats">
+        <div class="astat"><div class="aslbl">Saldo</div><div class="asval" id="adBalance">$ 0</div></div>
+        <div class="astat"><div class="aslbl">Ingresos</div><div class="asval positive" id="adIncome">$ 0</div></div>
+        <div class="astat"><div class="aslbl">Egresos</div><div class="asval negative" id="adExpense">$ 0</div></div>
+        <div class="astat"><div class="aslbl">Movim.</div><div class="asval" id="adCount">0</div></div>
+      </div>
+      <div class="stitle" style="font-size:.86rem;"><i class="fas fa-history"></i> Últimos movimientos</div>
+      <div class="vlist" id="adTransactions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL GASTO ══ -->
+<div class="modal" id="gastoModal">
+  <div class="mc">
+    <div class="mhdr"><h2 id="gastoModalTitle">Nuevo Gasto</h2><i class="fas fa-times" id="closeGastoModal" style="cursor:pointer;color:var(--steam)"></i></div>
+    <div class="mbody">
+      <form id="gastoForm">
+        <input type="hidden" id="gastoId">
+        <div class="frow">
+          <div class="fg"><label>Concepto</label><input type="text" id="gastoConcepto" placeholder="Ej: Insumos café" required></div>
+          <div class="fg"><label>Monto ($)</label><input type="number" id="gastoMonto" placeholder="0" min="0" required></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Categoría</label>
+            <select id="gastoCategoria">
+              <option value="Insumos">☕ Insumos</option>
+              <option value="Transporte">🚗 Transporte</option>
+              <option value="Servicios">💡 Servicios</option>
+              <option value="Personal">👤 Personal</option>
+              <option value="Mantenimiento">🔧 Mantenimiento</option>
+              <option value="Otros">📌 Otros</option>
+            </select>
+          </div>
+          <div class="fg"><label>Cuenta</label>
+            <select id="gastoCuenta">
+              <option value="efectivo">💵 Efectivo</option>
+              <option value="nequi">📱 Nequi</option>
+              <option value="bancolombia">🏦 Bancolombia</option>
+              <option value="daviplata">💳 Daviplata</option>
+            </select>
+          </div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Fecha</label><input type="date" id="gastoFecha" required></div>
+          <div class="fg"><label>Nota</label><input type="text" id="gastoNota" placeholder="Opcional"></div>
+        </div>
+        <div class="fbtns">
+          <button type="button" class="btn btn-s" id="cancelGastoBtn">Cancelar</button>
+          <button type="button" class="btn btn-d btn-sm" id="deleteGastoBtn" style="display:none;"><i class="fas fa-trash"></i></button>
+          <button type="submit" class="btn btn-p">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL CRÉDITO ══ -->
+<div class="modal" id="creditoModal">
+  <div class="mc">
+    <div class="mhdr"><h2 id="creditoModalTitle">Nuevo Crédito</h2><button class="cbtn" onclick="document.getElementById('creditoModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
+    <div class="mbody">
+      <form id="creditoForm">
+        <input type="hidden" id="creditoId">
+        <div class="fg"><label>Cliente</label><input type="text" id="creditoCliente" placeholder="Nombre del cliente" required list="clientesSuggestions3"><datalist id="clientesSuggestions3"></datalist></div>
+        <div class="frow">
+          <div class="fg"><label>Deuda ($)</label><input type="number" id="creditoDeuda" placeholder="0" min="0" required></div>
+          <div class="fg"><label>Fecha</label><input type="date" id="creditoFecha" required></div>
+        </div>
+        <div class="fg"><label>Descripción</label><input type="text" id="creditoDesc" placeholder="Ej: Pedido martes" required></div>
+        <div class="fbtns">
+          <button type="button" class="btn btn-s" onclick="document.getElementById('creditoModal').classList.remove('active')">Cancelar</button>
+          <button type="submit" class="btn btn-p">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL ABONO ══ -->
+<div class="modal" id="abonoModal">
+  <div class="mc">
+    <div class="mhdr"><h2>💰 Registrar Abono</h2><button class="cbtn" onclick="document.getElementById('abonoModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
+    <div class="mbody">
+      <input type="hidden" id="abonoCreditoId">
+      <div id="abonoClienteInfo" style="background:var(--latte);border-radius:var(--rs);padding:12px;margin-bottom:14px;font-size:.88rem;"></div>
+      <div class="frow">
+        <div class="fg"><label>Monto Abono ($)</label><input type="number" id="abonoMonto" placeholder="0" min="0" required></div>
+        <div class="fg"><label>Cuenta</label>
+          <select id="abonoCuenta">
+            <option value="efectivo">💵 Efectivo</option>
+            <option value="nequi">📱 Nequi</option>
+            <option value="bancolombia">🏦 Bancolombia</option>
+            <option value="daviplata">💳 Daviplata</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg"><label>Nota</label><input type="text" id="abonoNota" placeholder="Opcional"></div>
+      <button class="btn btn-ok btn-full" onclick="confirmarAbono()"><i class="fas fa-check"></i> Confirmar Abono</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL PEDIR NOMBRE PENDIENTE ══ -->
+<div class="modal" id="pedirNombreModal">
+  <div class="mc">
+    <div class="mhdr"><h2>👤 ¿A nombre de quién?</h2><button class="cbtn" onclick="document.getElementById('pedirNombreModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
+    <div class="mbody">
+      <div class="fg">
+        <label>Nombre del cliente</label>
+        <input type="text" id="pendNombreInput" placeholder="Nombre o apodo" list="clientesSuggestions2" autocomplete="off">
+        <datalist id="clientesSuggestions2"></datalist>
+      </div>
+      <div class="fbtns">
+        <button class="btn btn-s" onclick="document.getElementById('pedirNombreModal').classList.remove('active')">Cancelar</button>
+        <button class="btn btn-p" onclick="confirmarGuardarPendienteConNombre()"><i class="fas fa-save"></i> Guardar Pendiente</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL FACTURA INVENTARIO ══ -->
+<div class="modal" id="facturaModal">
+  <div class="mc">
+    <div class="mhdr"><h2 id="facturaModalTitle"><i class="fas fa-file-invoice-dollar"></i> Nueva Factura de Compra</h2><button class="cbtn" onclick="document.getElementById('facturaModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
+    <div class="mbody">
+      <form id="facturaForm">
+        <input type="hidden" id="facturaId">
+        <div class="frow">
+          <div class="fg"><label>Proveedor</label><input type="text" id="facturaProveedor" placeholder="Ej: Café Colombia S.A." required></div>
+          <div class="fg"><label>N° Factura</label><input type="text" id="facturaNumero" placeholder="Ej: FAC-001"></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Fecha</label><input type="date" id="facturaFecha" required></div>
+          <div class="fg"><label>Cuenta de Pago</label>
+            <select id="facturaCuenta">
+              <option value="efectivo">💵 Efectivo</option>
+              <option value="nequi">📱 Nequi</option>
+              <option value="bancolombia">🏦 Bancolombia</option>
+              <option value="daviplata">💳 Daviplata</option>
+            </select>
+          </div>
+        </div>
+        <div class="fg"><label>Nota</label><input type="text" id="facturaNote" placeholder="Opcional"></div>
+
+        <div class="stitle" style="font-size:.85rem;margin-top:10px"><i class="fas fa-boxes"></i> Productos Comprados</div>
+        <div id="facturaItems"></div>
+        <button type="button" class="btn btn-s btn-sm" style="margin-bottom:12px" onclick="addFacturaItem()"><i class="fas fa-plus"></i> Agregar Item</button>
+
+        <div style="background:var(--latte);border-radius:var(--rs);padding:12px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;font-weight:600">
+            <span>Total Factura:</span>
+            <span id="facturaTotalDisplay" style="font-family:'Playfair Display',serif;color:var(--cw);font-size:1.1rem">$ 0</span>
+          </div>
+        </div>
+
+        <div class="fbtns">
+          <button type="button" class="btn btn-s" onclick="document.getElementById('facturaModal').classList.remove('active')">Cancelar</button>
+          <button type="button" class="btn btn-d btn-sm" id="deleteFacturaBtn" style="display:none;" onclick="eliminarFactura()"><i class="fas fa-trash"></i></button>
+          <button type="submit" class="btn btn-p"><i class="fas fa-save"></i> Guardar Factura</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL INSUMO ══ -->
+<div class="modal" id="insumoModal">
+  <div class="mc">
+    <div class="mhdr"><h2 id="insumoModalTitle"><i class="fas fa-box"></i> Nuevo Insumo</h2><button class="cbtn" onclick="document.getElementById('insumoModal').classList.remove('active')"><i class="fas fa-times"></i></button></div>
+    <div class="mbody">
+      <form id="insumoForm">
+        <input type="hidden" id="insumoId">
+        <div class="frow">
+          <div class="fg"><label>Nombre</label><input type="text" id="insumoNombre" placeholder="Ej: Café molido" required></div>
+          <div class="fg"><label>Emoji</label><input type="text" id="insumoEmoji" placeholder="☕" maxlength="4"></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Unidad</label>
+            <select id="insumoUnidad">
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="L">L</option>
+              <option value="ml">ml</option>
+              <option value="und">und</option>
+              <option value="paq">paq</option>
+              <option value="caj">caj</option>
+            </select>
+          </div>
+          <div class="fg"><label>Stock Mínimo</label><input type="number" id="insumoStockMin" placeholder="0" min="0" step="0.1"></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Stock Actual</label><input type="number" id="insumoStockActual" placeholder="0" min="0" step="0.1"></div>
+          <div class="fg"><label>Categoría</label>
+            <select id="insumoCategoria">
+              <option value="Café">☕ Café</option>
+              <option value="Lácteos">🥛 Lácteos</option>
+              <option value="Azúcar">🍬 Azúcar/Endulzantes</option>
+              <option value="Empaque">📦 Empaques</option>
+              <option value="Limpieza">🧹 Limpieza</option>
+              <option value="Otros">📌 Otros</option>
+            </select>
+          </div>
+        </div>
+        <div class="fbtns">
+          <button type="button" class="btn btn-s" onclick="document.getElementById('insumoModal').classList.remove('active')">Cancelar</button>
+          <button type="button" class="btn btn-d btn-sm" id="deleteInsumoBtn" style="display:none;" onclick="eliminarInsumo()"><i class="fas fa-trash"></i></button>
+          <button type="submit" class="btn btn-p">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts modulares -->
+<script src="js/utils.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/caja.js"></script>
+<script src="js/pendientes.js"></script>
+<script src="js/creditos.js"></script>
+<script src="js/gastos.js"></script>
+<script src="js/inventario.js"></script>
+<script src="js/transactions.js"></script>
+<script src="js/productos.js"></script>
+<script src="js/respaldos.js"></script>
+<script src="js/sheets.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
