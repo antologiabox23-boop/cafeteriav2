@@ -145,6 +145,12 @@ function confirmarCobro() {
                type: 'ingreso', esventa: true, cliente: cliente || null,
                accKey: selPayMethod, accName: accounts[selPayMethod].name };
   accounts[selPayMethod].transactions.push(tx);
+
+  // Descontar stock de insumos vinculados
+  if (!cobroEsPendiente && ordenActual.length) {
+    descontarStockPorVenta(ordenActual);
+  }
+
   saveAccounts();
   updateUI();
   updateCajaHdr();
