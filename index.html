@@ -403,7 +403,24 @@
           <div class="fg"><label>Precio ($)</label><input type="number" id="prodPrecio" placeholder="0" min="0" required></div>
         </div>
         <div class="fg"><label>Nombre</label><input type="text" id="prodNombre" placeholder="Ej: Café Americano" required></div>
-        <div class="fbtns">
+
+        <!-- Insumos que consume este producto -->
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px">
+              <i class="fas fa-boxes" style="color:var(--cw)"></i> Descuenta del stock al vender
+            </div>
+            <button type="button" class="btn btn-i btn-sm" style="padding:3px 10px" onclick="addProdInsumo()">
+              <i class="fas fa-plus"></i> Insumo
+            </button>
+          </div>
+          <div id="prodInsumosList"></div>
+          <div style="font-size:.72rem;color:#aaa;margin-top:4px">
+            Opcional. Si no vinculas insumos, el producto se vende sin descontar stock.
+          </div>
+        </div>
+
+        <div class="fbtns" style="margin-top:14px">
           <button type="button" class="btn btn-s" onclick="document.getElementById('prodModal').classList.remove('active')">Cancelar</button>
           <button type="button" class="btn btn-d btn-sm" id="deleteProdBtn" style="display:none;" onclick="eliminarProd()"><i class="fas fa-trash"></i></button>
           <button type="submit" class="btn btn-p">Guardar</button>
