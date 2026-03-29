@@ -1,6 +1,17 @@
 /* ══════════════════════════════════════════════════════════════════
    sheets.js — Google Sheets como base de datos en tiempo real
-   v2.1 — GET para lecturas, POST para escrituras (sin límite de tamaño)
+   v2.2 — TODO por GET con payload base64 (evita CORS en POST)
+
+   ¿Por qué se cambió POST → GET?
+   ─────────────────────────────────────────────────────────────────
+   Cuando el navegador hace un fetch() POST a un Apps Script, Google
+   responde con un HTTP 302 redirect hacia una URL diferente. Aunque
+   el código usa redirect:'follow', el browser bloquea ese redirect
+   cross-origin y lanza "Failed to fetch".
+   La solución es enviar TODO por GET con el payload serializado en
+   base64 en el query string. Apps Script acepta GET sin restricciones
+   de CORS. Para payloads grandes (syncAll), el dato se comprime con
+   un mini-JSON minificado antes de codificarlo.
 
    ⚙️  ÚNICO PASO DE CONFIGURACIÓN:
        Reemplaza SCRIPT_URL con la URL de tu Apps Script desplegado.
@@ -11,24 +22,31 @@ const Sheets = (() => {
 
   // ─── CONFIGURACIÓN ─────────────────────────────────────────────
   // Pega aquí la URL de tu Web App después de desplegar Code.gs:
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybgi_Jo3xE7y429zyTtYWDrJgl1vnk9qIM7Q0ZdKuQ-_eYtY3jEq__4jGlF8RpNXI1/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz03PyZTc0TjBo_Wt8-T-sHlgxWMATDkPlSJiTaw9EMw7AJ-_RSsr37KfIlnLf2xAU7Sg/exec';
   // ───────────────────────────────────────────────────────────────
 
-  const TIMEOUT_MS = 30000;
+  const TIMEOUT_MS = 45000;   // syncAll puede tardar más
   let _ready   = false;
   let _syncing = false;
 
-  // ─── HTTP HELPERS ──────────────────────────────────────────────
-
-  // GET con payload base64 — para lecturas (ping, getAll)
-  // No tiene payload grande, así que GET funciona bien.
+  // ─── HTTP HELPER (solo GET) ─────────────────────────────────────
+  // Serializa el payload a JSON → UTF-8 → base64 → query string.
+  // Apps Script decodifica con Utilities.base64Decode + getDataAsString.
   async function _get(action, payload = {}) {
     if (!_validUrl()) throw new Error('⚙️ Configura SCRIPT_URL en js/sheets.js');
 
     const jsonStr = JSON.stringify(payload);
-    const bytes   = new TextEncoder().encode(jsonStr);
-    const b64     = btoa(String.fromCharCode(...bytes));
-    const url = `${SCRIPT_URL}?action=${action}&payload=${encodeURIComponent(b64)}`;
+
+    // Codificación UTF-8 segura para base64 (soporta tildes, ñ, emojis)
+    const bytes = new TextEncoder().encode(jsonStr);
+    // Convertir Uint8Array a string binario para btoa
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const b64 = btoa(binary);
+
+    const url = `${SCRIPT_URL}?action=${encodeURIComponent(action)}&payload=${encodeURIComponent(b64)}`;
 
     const ctrl    = new AbortController();
     const timerId = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -44,34 +62,8 @@ const Sheets = (() => {
     return _parseResponse(res);
   }
 
-  // POST con JSON en body — para escrituras (syncAll, addRow, updateRow, deleteRow)
-  // Sin límite de tamaño. Apps Script acepta POST si el script lo maneja.
-  async function _post(action, payload = {}) {
-    if (!_validUrl()) throw new Error('⚙️ Configura SCRIPT_URL en js/sheets.js');
-
-    const body = JSON.stringify({ action, payload });
-    const ctrl    = new AbortController();
-    const timerId = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-    let res;
-    try {
-      res = await fetch(SCRIPT_URL, {
-        method: 'POST',
-        redirect: 'follow',
-        signal: ctrl.signal,
-        headers: { 'Content-Type': 'text/plain' }, // text/plain evita preflight CORS
-        body
-      });
-    } catch (err) {
-      clearTimeout(timerId);
-      if (err.name === 'AbortError') throw new Error('Tiempo de espera agotado. Verifica tu conexión.');
-      throw err;
-    }
-    clearTimeout(timerId);
-    return _parseResponse(res);
-  }
-
   function _validUrl() {
-    return SCRIPT_URL && SCRIPT_URL.startsWith('https://script.google.com/macros/s/');
+    return SCRIPT_URL && SCRIPT_URL.startsWith('https://script.google.com/macros/s/AKfycbz03PyZTc0TjBo_Wt8-T-sHlgxWMATDkPlSJiTaw9EMw7AJ-_RSsr37KfIlnLf2xAU7Sg/exec');
   }
 
   async function _parseResponse(res) {
@@ -154,38 +146,40 @@ const Sheets = (() => {
     renderInventario();
   }
 
-  // ─── PUSH COMPLETO → SHEETS ────────────────────────────────────
-  // POST evita el límite de URL que causaba "Failed to fetch"
+  // ─── PUSH COMPLETO → SHEETS (ahora por GET) ────────────────────
+  // Se usa GET con payload base64 para evitar el problema de CORS/redirect
+  // que causaba "Failed to fetch" al hacer POST desde el navegador.
   async function pushAll() {
     if (!_validUrl()) { notify('Configura SCRIPT_URL en js/sheets.js', 'warning'); return; }
     _setSyncLabel('Enviando a Sheets…');
     notify('Sincronizando con Sheets…', 'info', 4000);
     try {
-      await _post('syncAll', { data: exportAllData() });
+      await _get('syncAll', { data: exportAllData() });
       _setSyncLabel(`✅ Sincronizado · ${_ts()}`);
       notify('✅ Datos enviados a Sheets', 'success');
     } catch (err) {
       _setSyncLabel(`❌ ${err.message}`);
       notify('Error al sincronizar: ' + err.message, 'danger');
+      console.error('[Sheets.pushAll]', err);
     }
   }
 
-  // ─── ESCRITURA OPTIMISTA (fila a fila) — también POST ──────────
+  // ─── ESCRITURA OPTIMISTA (fila a fila) — también por GET ───────
   function appendRow(sheet, row) {
     if (!_validUrl()) return;
-    _post('addRow', { sheet, row })
+    _get('addRow', { sheet, row })
       .catch(err => console.warn(`[Sheets.appendRow:${sheet}]`, err.message));
   }
 
   function updateRow(sheet, id, data) {
     if (!_validUrl()) return;
-    _post('updateRow', { sheet, id, data })
+    _get('updateRow', { sheet, id, data })
       .catch(err => console.warn(`[Sheets.updateRow:${sheet}]`, err.message));
   }
 
   function deleteRow(sheet, id) {
     if (!_validUrl()) return;
-    _post('deleteRow', { sheet, id })
+    _get('deleteRow', { sheet, id })
       .catch(err => console.warn(`[Sheets.deleteRow:${sheet}]`, err.message));
   }
 
