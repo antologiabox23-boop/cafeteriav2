@@ -92,6 +92,15 @@
       <div class="fg" style="margin:0"><label>Descripción</label><input type="text" id="vmDesc" placeholder="Ej: Café para llevar"></div>
       <div class="fg" style="margin:0"><label>Monto ($)</label><input type="number" id="vmMonto" placeholder="0" min="0"></div>
     </div>
+    <div class="fg" style="margin:6px 0 0">
+      <label>Cuenta</label>
+      <select id="vmCuenta">
+        <option value="efectivo">💵 Efectivo</option>
+        <option value="nequi">📱 Nequi</option>
+        <option value="bancolombia">🏦 Bancolombia</option>
+        <option value="daviplata">💳 Daviplata</option>
+      </select>
+    </div>
     <button class="btn btn-p btn-full" style="margin-top:10px" onclick="ventaManualRapida()"><i class="fas fa-plus"></i> Registrar Venta</button>
   </div>
 
@@ -274,6 +283,7 @@
 
 <!-- FABs -->
 <button class="fab fab-main" id="addTransactionBtn" title="Nueva Transacción"><i class="fas fa-plus"></i></button>
+<button class="fab" id="addTransferBtn" title="Transferencia entre cuentas" style="bottom:90px;background:var(--cr);opacity:.92"><i class="fas fa-exchange-alt"></i></button>
 
 <!-- ══ MODAL TRANSACCIÓN ══ -->
 <div class="modal" id="transactionModal">
@@ -308,6 +318,48 @@
           <button type="button" class="btn btn-s close-modal">Cancelar</button>
           <button type="button" class="btn btn-d btn-sm" id="deleteTransactionBtn" style="display:none;"><i class="fas fa-trash"></i></button>
           <button type="submit" class="btn btn-p" id="submitTransactionBtn">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL TRANSFERENCIA ENTRE CUENTAS ══ -->
+<div class="modal" id="transferModal">
+  <div class="mc">
+    <div class="mhdr"><h2>🔁 Transferencia entre Cuentas</h2><i class="fas fa-times close-modal"></i></div>
+    <div class="mbody">
+      <form id="transferForm">
+        <div class="frow">
+          <div class="fg">
+            <label>Cuenta Origen</label>
+            <select id="transferOrigen" required>
+              <option value="">Seleccionar</option>
+              <option value="efectivo">💵 Efectivo</option>
+              <option value="nequi">📱 Nequi</option>
+              <option value="bancolombia">🏦 Bancolombia</option>
+              <option value="daviplata">💳 Daviplata</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Cuenta Destino</label>
+            <select id="transferDestino" required>
+              <option value="">Seleccionar</option>
+              <option value="efectivo">💵 Efectivo</option>
+              <option value="nequi">📱 Nequi</option>
+              <option value="bancolombia">🏦 Bancolombia</option>
+              <option value="daviplata">💳 Daviplata</option>
+            </select>
+          </div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Monto ($)</label><input type="number" id="transferMonto" placeholder="0" min="1" required></div>
+          <div class="fg"><label>Fecha</label><input type="date" id="transferFecha" required></div>
+        </div>
+        <div class="fg"><label>Nota (opcional)</label><input type="text" id="transferNota" placeholder="Ej: Recarga Nequi"></div>
+        <div class="fbtns">
+          <button type="button" class="btn btn-s close-modal">Cancelar</button>
+          <button type="submit" class="btn btn-p">Transferir</button>
         </div>
       </form>
     </div>
