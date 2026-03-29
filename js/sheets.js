@@ -71,7 +71,7 @@ const Sheets = (() => {
   }
 
   function _validUrl() {
-    return SCRIPT_URL && SCRIPT_URL.startsWith('https://script.google.com/macros/s/');
+    return SCRIPT_URL && SCRIPT_URL.startsWith('https://script.google.com/macros/s/AKfycbybgi_Jo3xE7y429zyTtYWDrJgl1vnk9qIM7Q0ZdKuQ-_eYtY3jEq__4jGlF8RpNXI1/exec');
   }
 
   async function _parseResponse(res) {
