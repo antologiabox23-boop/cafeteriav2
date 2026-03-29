@@ -236,12 +236,6 @@ header {
 .pmb.sel, .pmb:hover { border-color: var(--cw); background: var(--cream); }
 .pmb i { display: block; font-size: 1.1rem; margin-bottom: 3px; }
 
-/* ── FLOATING BUTTON ── */
-.fab { position: fixed; right: 18px; width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer; font-size: 1.3rem; color: white; display: flex; align-items: center; justify-content: center; box-shadow: var(--shl); transition: all .2s; z-index: 200; }
-.fab:hover { transform: scale(1.08); }
-.fab:active { transform: scale(.95); }
-.fab-main { bottom: 18px; background: linear-gradient(135deg, var(--cw), var(--cm)); }
-
 /* ── BACKUP ── */
 .bkup { background: white; border-radius: var(--r); padding: 16px; box-shadow: var(--sh); margin-bottom: 13px; }
 .bkup h3 { font-family: 'Playfair Display', serif; margin-bottom: 9px; color: var(--cr); font-size: .98rem; }
