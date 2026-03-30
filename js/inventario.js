@@ -495,6 +495,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (pIdx === -1) return;
       const cantAntes = prods[pIdx].stock || 0;
       prods[pIdx].stock = cantAntes + (it.cantidad || 0);
+      sheetsSync('producto', prods[pIdx]); // sincronizar stock actualizado
 
       const mov = {
         id:         Date.now() + Math.random(),

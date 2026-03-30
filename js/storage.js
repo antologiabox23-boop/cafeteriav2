@@ -23,7 +23,6 @@ let creditos      = [];
 let pendientes    = [];
 let facturas      = [];
 let stockMovs     = [];   // ← reemplaza movInventario
-let cierres       = [];   // registros de cierre diario (base de caja)
 
 // ─── Defaults de productos (con stock = 0) ──────────────────────
 const defaultProds = [
@@ -43,8 +42,7 @@ const LS = {
   pend:     'ms_pendientes',
   facturas: 'ms_facturas',
   stockMovs:'ms_stockmovs',
-  prods:    'ms_prods',
-  cierres:  'ms_cierres'
+  prods:    'ms_prods'
 };
 
 // Carga desde localStorage — se usa solo si Sheets no está disponible
@@ -56,7 +54,6 @@ function load() {
     const sp = localStorage.getItem(LS.pend);       if (sp) pendientes = JSON.parse(sp);
     const sf = localStorage.getItem(LS.facturas);   if (sf) facturas   = JSON.parse(sf);
     const sm = localStorage.getItem(LS.stockMovs);  if (sm) stockMovs  = JSON.parse(sm);
-    const sk = localStorage.getItem(LS.cierres);    if (sk) cierres   = JSON.parse(sk);
   } catch (e) { console.warn('[storage.load]', e); }
 }
 
@@ -67,7 +64,6 @@ function saveCreditos()   { localStorage.setItem(LS.creditos,  JSON.stringify(cr
 function savePendientes() { localStorage.setItem(LS.pend,      JSON.stringify(pendientes)); }
 function saveFacturas()   { localStorage.setItem(LS.facturas,  JSON.stringify(facturas)); }
 function saveStockMovs()  { localStorage.setItem(LS.stockMovs, JSON.stringify(stockMovs)); }
-function saveCierres()     { localStorage.setItem(LS.cierres,   JSON.stringify(cierres)); }
 
 function getProds() {
   try { const s = localStorage.getItem(LS.prods); return s ? JSON.parse(s) : defaultProds; }
@@ -102,7 +98,6 @@ function exportAllData() {
     accounts, gastos, creditos, pendientes,
     facturas,
     stockMovs,
-    cierres,
     productos:  getProds(),
     exportedAt: new Date().toISOString()
   };
@@ -127,10 +122,39 @@ function importAllData(data) {
   }
   if (data.gastos)     { gastos     = data.gastos;     saveGastos(); }
   if (data.creditos)   { creditos   = data.creditos;   saveCreditos(); }
-  if (data.pendientes) { pendientes = data.pendientes; savePendientes(); }
+  if (data.pendientes) {
+    // Proteger preventas activas del localStorage que Sheets puede no tener actualizadas.
+    // Una preventa "activa" es la que tiene entregas pendientes en este dispositivo.
+    const esPrev = p => p.esPreventa === true || p.esPreventa === 1 ||
+                        p.esPreventa === 'true' || p.esPreventa === '1';
+    let localPrev;
+    try {
+      const sp = localStorage.getItem('ms_pendientes');
+      localPrev = sp ? JSON.parse(sp).filter(p => esPrev(p)) : [];
+    } catch(e) { localPrev = []; }
+
+    // Mezclar: tomar los pendientes normales de Sheets + las preventas locales
+    // (las preventas locales tienen el estado más fresco de entregas parciales)
+    const sheetsNormales = data.pendientes.filter(p => !esPrev(p));
+    const sheetsPrevs    = data.pendientes.filter(p => esPrev(p));
+
+    // Para cada preventa de Sheets, usar la versión local si existe (más actualizada)
+    const mergedPrevs = sheetsPrevs.map(sp => {
+      const local = localPrev.find(lp => Number(lp.id) === Number(sp.id));
+      return local || sp;
+    });
+    // Agregar preventas locales que no están en Sheets (creadas offline)
+    localPrev.forEach(lp => {
+      if (!mergedPrevs.find(mp => Number(mp.id) === Number(lp.id))) {
+        mergedPrevs.push(lp);
+      }
+    });
+
+    pendientes = [...sheetsNormales, ...mergedPrevs];
+    savePendientes();
+  }
   if (data.facturas)   { facturas   = data.facturas;   saveFacturas(); }
   if (data.stockMovs)  { stockMovs  = data.stockMovs;  saveStockMovs(); }
-  if (data.cierres)    { cierres    = data.cierres;    saveCierres(); }
   if (data.productos)  { saveProds(data.productos); }
 }
 
@@ -174,7 +198,8 @@ function sheetsSync(tipo, obj) {
         if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.STOCK_MOVS, obj);
         break;
       case 'producto':
-        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.PRODUCTOS, obj);
+        // updateRow actualiza la fila existente (stock, precio, etc.)
+        if (obj && obj.id) Sheets.updateRow(Sheets.HOJAS.PRODUCTOS, obj.id, obj);
         break;
     }
   } catch (e) {

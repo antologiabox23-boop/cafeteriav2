@@ -64,6 +64,7 @@ function descontarStockPorVenta(itemsVendidos) {
     const consumo = it.qty || 1;
     prods[idx].stock = Math.max(0, (p.stock || 0) - consumo);
     saveProds(prods);
+    sheetsSync('producto', prods[idx]); // sincronizar stock actualizado
 
     const mov = {
       id:          Date.now() + Math.random(),
