@@ -176,9 +176,9 @@ function _toggleEspecialSection(show) {
   if (show) {
     const isConsumo = selPayMethod === 'consumo';
     document.getElementById('cobroEspecialLabel').textContent =
-      isConsumo ? 'Receptor (entrenador/propietario)' : 'Motivo (ej: Bono cumpleaños)';
+      isConsumo ? 'Receptor (propietario/entrenador)' : 'Motivo (ej: Bono cumpleaños)';
     document.getElementById('cobroEspecialInput').placeholder =
-      isConsumo ? 'Ej: Diana, Carlos...' : 'Ej: Bono cumpleaños, Promoción...';
+      isConsumo ? 'Ej: Tatiana, Diana, Carlos...' : 'Ej: Bono cumpleaños, Promoción...';
     document.getElementById('cobroEspecialTitle').textContent =
       isConsumo ? '🏋️ Consumo interno' : '🎁 Entrega por promoción';
     document.getElementById('cobroEspecialInfo').textContent =
