@@ -63,8 +63,9 @@
   </div>
 
   <div class="stitle"><i class="fas fa-th"></i> Productos Rápidos</div>
-  <div class="cobrar-row" style="margin-bottom:10px">
+  <div class="cobrar-row" style="margin-bottom:10px;flex-wrap:wrap;gap:6px">
     <button class="btn btn-ok" onclick="guardarPendiente()"><i class="fas fa-clock"></i> Pendiente</button>
+    <button class="btn" style="background:#7c3aed;color:white" onclick="abrirPreventa()"><i class="fas fa-tag"></i> Preventa</button>
     <button class="btn btn-cobrar" onclick="abrirCobro()"><i class="fas fa-check-circle"></i> Cobrar</button>
   </div>
   <div class="prod-grid" id="prodGrid"></div>
@@ -370,12 +371,25 @@
         <div id="cobroTotal" style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--cw);"></div>
       </div>
       <div class="stitle" style="font-size:.86rem;"><i class="fas fa-credit-card"></i> Método de pago</div>
-      <div class="pmethods">
+      <div class="pmethods" style="flex-wrap:wrap">
         <button class="pmb sel" data-cuenta="efectivo" onclick="selPay(this)"><i class="fas fa-money-bill-wave" style="color:#d97706"></i>Efectivo</button>
         <button class="pmb" data-cuenta="nequi" onclick="selPay(this)"><i class="fas fa-mobile-alt" style="color:#7c3aed"></i>Nequi</button>
         <button class="pmb" data-cuenta="bancolombia" onclick="selPay(this)"><i class="fas fa-university" style="color:#0284c7"></i>Bancolombia</button>
         <button class="pmb" data-cuenta="daviplata" onclick="selPay(this)"><i class="fas fa-wallet" style="color:#059669"></i>Daviplata</button>
+        <button class="pmb" data-cuenta="especial" onclick="selPay(this)" style="border-color:#d97706"><i class="fas fa-gift" style="color:#d97706"></i>Promoción</button>
+        <button class="pmb" data-cuenta="consumo" onclick="selPay(this)" style="border-color:#059669"><i class="fas fa-dumbbell" style="color:#059669"></i>Interno</button>
       </div>
+
+      <!-- Sección dinámica para Promoción / Consumo interno -->
+      <div id="cobroEspecialSection" style="display:none;background:var(--latte);border-radius:var(--rs);padding:10px 12px;margin:8px 0;border-left:3px solid var(--cw)">
+        <div id="cobroEspecialTitle" style="font-size:.75rem;font-weight:700;color:var(--cw);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🎁 Entrega por promoción</div>
+        <div class="fg" style="margin:0">
+          <label id="cobroEspecialLabel" style="font-size:.72rem">Motivo</label>
+          <input type="text" id="cobroEspecialInput" placeholder="Ej: Bono cumpleaños" autocomplete="off">
+        </div>
+        <div id="cobroEspecialInfo" style="font-size:.72rem;color:#888;margin-top:5px">Descuenta del stock sin registrar ingreso.</div>
+      </div>
+
       <div class="fg"><label>Nota (opcional)</label><input type="text" id="cobroNota" placeholder="Ej: Cliente frecuente"></div>
       <button class="btn btn-ok btn-full" style="margin-top:8px;padding:15px;font-size:.95rem;" onclick="confirmarCobro()"><i class="fas fa-check-circle"></i> Confirmar Cobro</button>
     </div>
@@ -626,6 +640,18 @@
   </div>
 </div>
 
+<!-- ══ MODAL PREVENTA ══ -->
+<div class="modal" id="preventaModal">
+  <div class="mc" style="max-width:480px">
+    <div class="mhdr">
+      <h2><i class="fas fa-tag" style="color:#7c3aed"></i> Preventa</h2>
+      <button class="cbtn" onclick="document.getElementById('preventaModal').classList.remove('active')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="mbody" id="preventaModalBody">
+      <!-- Renderizado dinámicamente por _renderPreventaModal() -->
+    </div>
+  </div>
+</div>
 
 <!-- Scripts modulares -->
 <script src="js/utils.js"></script>
