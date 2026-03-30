@@ -11,7 +11,7 @@
 const Sheets = (() => {
 
   // ─── CONFIGURACIÓN ─────────────────────────────────────────────
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwhLwKekzS_OuSDK3kRwb75ohpzleVJeh3BRdNv89Ud1hMWjzZPE6nooTyHS0n4Iw2riQ/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyfjvDiOl3CLtHgDp2VsLURcvixfKzTzRzHm7FnnxS5_lce9ECIzMBy7jKfyb6ifa54DQ/exec';
   // ───────────────────────────────────────────────────────────────
 
   const TIMEOUT_MS = 45000;
