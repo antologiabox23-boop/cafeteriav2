@@ -545,9 +545,17 @@ function _confirmarCierre(efectivoReal = 0) {
   const base      = parseFloat(baseInput?.value) || efectivoReal;
 
   // ── Mover pendientes normales a créditos (preventas se quedan) ──
+  // Función robusta: reconoce esPreventa en cualquier formato que haya quedado en localStorage
+  const esPrev = p => p.esPreventa === true || p.esPreventa === 1 ||
+                       p.esPreventa === 'true' || p.esPreventa === '1';
+
+  console.log('[Cierre] Pendientes antes del cierre:', JSON.stringify(
+    pendientes.map(p => ({ id: p.id, cliente: p.cliente, esPreventa: p.esPreventa, tipo: typeof p.esPreventa }))
+  ));
+
   let movidos = 0;
   pendientes.forEach(p => {
-    if (p.esPreventa) return; // preventas ya cobradas, solo pendiente entrega
+    if (esPrev(p)) return; // preventa ya cobrada — solo queda la entrega física
     creditos.push({
       id: Date.now() + movidos, cliente: p.cliente, deuda: p.total,
       desc: `[Cierre ${today}] ${p.concepto}`, fecha: p.fecha, pagos: []
@@ -556,7 +564,9 @@ function _confirmarCierre(efectivoReal = 0) {
     movidos++;
   });
   const pendMovidos = movidos;
-  pendientes = pendientes.filter(p => !!p.esPreventa);
+  pendientes = pendientes.filter(p => esPrev(p));
+
+  console.log('[Cierre] Preventas conservadas:', pendientes.length);
   savePendientes(); saveCreditos();
 
   // ── Registrar el cierre (solo para control — NO toca accounts) ──
