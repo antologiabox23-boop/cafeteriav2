@@ -20,9 +20,11 @@ var SH = {
   INSUMOS:  'Inventario_Insumos',
   FACTURAS: 'Inventario_Facturas',
   MOV_INV:  'Inventario_Movimientos',
-  PRODS:    'Productos',
-  CONFIG:   'Config',
-  LOG:      'Log'
+  PRODS:      'Productos',
+  STOCK_MOVS: 'Stock_Movimientos',
+  CIERRES:    'Cierres',
+  CONFIG:     'Config',
+  LOG:        'Log'
 };
 
 // ─── Cabeceras por hoja (definen columnas y orden) ───────────────
@@ -30,11 +32,13 @@ var HEADERS = {
   'Transacciones':          ['cuenta','cuentaKey','id','date','concept','amount','type','esventa','cliente','facturaId','gastoId'],
   'Gastos':                 ['id','concepto','monto','categoria','cuenta','fecha','nota'],
   'Creditos':               ['id','cliente','deuda','desc','fecha','pagos'],
-  'Pendientes':             ['id','cliente','concepto','total','items','fecha','hora'],
+  'Pendientes':             ['id','cliente','concepto','total','items','fecha','hora','esPreventa','pagado','totalEntregado','cuentaKey'],
   'Inventario_Insumos':     ['id','nombre','emoji','unidad','stockActual','stockMin','categoria'],
   'Inventario_Facturas':    ['id','proveedor','numero','fecha','cuenta','nota','total','items'],
   'Inventario_Movimientos': ['id','insumoId','insumoNombre','emoji','unidad','cantidad','tipo','motivo','fecha'],
-  'Productos':              ['id','nombre','emoji','precio'],
+  'Productos':              ['id','nombre','emoji','precio','stock'],
+  'Stock_Movimientos':      ['id','prodId','prodNombre','emoji','cantidad','tipo','motivo','fecha'],
+  'Cierres':                ['id','fecha','baseEfectivo','hora'],
   'Config':                 ['clave','valor','fecha'],
   'Log':                    ['timestamp','accion','detalle']
 };
@@ -109,6 +113,8 @@ function handleGetAll() {
     facturas:      _readRows(ss, SH.FACTURAS, _mapFactura),
     movInventario: _readRows(ss, SH.MOV_INV,  _mapMovInv),
     productos:     _readRows(ss, SH.PRODS,    _mapProducto),
+    stockMovs:     _readRows(ss, SH.STOCK_MOVS, _mapStockMov),
+    cierres:       _readRows(ss, SH.CIERRES,    _mapCierre),
     exportedAt:    new Date().toISOString()
   };
   _log(ss, 'getAll', 'OK');
@@ -129,8 +135,10 @@ function handleSyncAll(data) {
   _writeRows(ss, SH.PEND,     data.pendientes    || [], _rowPendiente);
   _writeRows(ss, SH.INSUMOS,  data.insumos       || [], _rowInsumo);
   _writeRows(ss, SH.FACTURAS, data.facturas      || [], _rowFactura);
-  _writeRows(ss, SH.MOV_INV,  data.movInventario || [], _rowMovInv);
-  _writeRows(ss, SH.PRODS,    data.productos     || [], _rowProducto);
+  _writeRows(ss, SH.MOV_INV,    data.movInventario || [], _rowMovInv);
+  _writeRows(ss, SH.PRODS,      data.productos     || [], _rowProducto);
+  _writeRows(ss, SH.STOCK_MOVS, data.stockMovs     || [], _rowStockMov);
+  _writeRows(ss, SH.CIERRES,    data.cierres       || [], _rowCierre);
   _writeConfig(ss, data.exportedAt);
   _log(ss, 'syncAll', 'OK');
   return { ok: true };
@@ -327,7 +335,13 @@ function _rowCredito(c) {
   return [c.id, c.cliente, c.deuda, c.desc, c.fecha, JSON.stringify(c.pagos || [])];
 }
 function _rowPendiente(p) {
-  return [p.id, p.cliente, p.concepto, p.total, JSON.stringify(p.items || []), p.fecha, p.hora || ''];
+  return [
+    p.id, p.cliente, p.concepto, p.total, JSON.stringify(p.items || []), p.fecha, p.hora || '',
+    p.esPreventa ? 'true' : '',
+    p.pagado     ? 'true' : '',
+    p.totalEntregado || 0,
+    p.cuentaKey  || ''
+  ];
 }
 function _rowInsumo(i) {
   return [i.id, i.nombre, i.emoji || '', i.unidad, i.stockActual, i.stockMin || 0, i.categoria || ''];
@@ -339,7 +353,7 @@ function _rowMovInv(m) {
   return [m.id, m.insumoId || '', m.insumoNombre, m.emoji || '', m.unidad, m.cantidad, m.tipo, m.motivo, m.fecha];
 }
 function _rowProducto(p) {
-  return [p.id, p.nombre, p.emoji || '', p.precio];
+  return [p.id, p.nombre, p.emoji || '', p.precio, p.stock !== undefined && p.stock !== null ? p.stock : ''];
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -399,7 +413,19 @@ function _mapCredito(r) {
 function _mapPendiente(r) {
   var it = [];
   try { it = JSON.parse(r[4] || '[]'); } catch(e) {}
-  return { id:Number(r[0]), cliente:r[1], concepto:r[2], total:Number(r[3]), items:it, fecha:_dateStr(r[5]), hora:r[6]||'' };
+  return {
+    id:             Number(r[0]),
+    cliente:        r[1],
+    concepto:       r[2],
+    total:          Number(r[3]),
+    items:          it,
+    fecha:          _dateStr(r[5]),
+    hora:           r[6] || '',
+    esPreventa:     r[7] === 'true' || r[7] === true,
+    pagado:         r[8] === 'true' || r[8] === true,
+    totalEntregado: Number(r[9]) || 0,
+    cuentaKey:      r[10] || ''
+  };
 }
 function _mapInsumo(r) {
   return { id:Number(r[0]), nombre:r[1], emoji:r[2]||'', unidad:r[3], stockActual:Number(r[4]), stockMin:Number(r[5]), categoria:r[6]||'' };
@@ -409,11 +435,24 @@ function _mapFactura(r) {
   try { it = JSON.parse(r[7] || '[]'); } catch(e) {}
   return { id:Number(r[0]), proveedor:r[1], numero:r[2]||'', fecha:_dateStr(r[3]), cuenta:r[4], nota:r[5]||'', total:Number(r[6]), items:it };
 }
+function _rowStockMov(m) {
+  return [m.id, m.prodId||'', m.prodNombre||'', m.emoji||'', m.cantidad, m.tipo, m.motivo||'', m.fecha];
+}
+function _mapStockMov(r) {
+  return { id:r[0], prodId:Number(r[1])||null, prodNombre:r[2]||'', emoji:r[3]||'', cantidad:Number(r[4]), tipo:r[5], motivo:r[6]||'', fecha:_dateStr(r[7]) };
+}
+function _rowCierre(c) {
+  return [c.id, c.fecha, c.baseEfectivo||0, c.hora||''];
+}
+function _mapCierre(r) {
+  return { id:r[0], fecha:_dateStr(r[1]), baseEfectivo:Number(r[2])||0, hora:r[3]||'' };
+}
 function _mapMovInv(r) {
   return { id:r[0], insumoId:r[1]||null, insumoNombre:r[2], emoji:r[3]||'', unidad:r[4], cantidad:Number(r[5]), tipo:r[6], motivo:r[7], fecha:_dateStr(r[8]) };
 }
 function _mapProducto(r) {
-  return { id:Number(r[0]), nombre:r[1], emoji:r[2]||'', precio:Number(r[3]) };
+  var stock = r[4] !== '' && r[4] !== null && r[4] !== undefined ? Number(r[4]) : null;
+  return { id:Number(r[0]), nombre:r[1], emoji:r[2]||'', precio:Number(r[3]), stock:stock };
 }
 
 // ─── Fecha: Date de Sheets → 'YYYY-MM-DD' ───────────────────────
