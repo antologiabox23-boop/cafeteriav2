@@ -102,19 +102,34 @@ function _renderPreventaModal() {
     ${itemsHtml}
     <div style="display:flex;justify-content:space-between;align-items:center;
                 padding:10px 0;margin-top:4px;border-top:2px solid var(--cream)">
-      <span style="font-weight:600">Total preventa:</span>
+      <span style="font-weight:600">Total a cobrar ahora:</span>
       <span id="pvTotal" style="font-family:'Playfair Display',serif;font-size:1.3rem;
             color:var(--cw);font-weight:700">$ 0</span>
     </div>
+
+    <div class="stitle" style="font-size:.82rem;margin:8px 0 6px">
+      <i class="fas fa-credit-card"></i> Método de pago
+    </div>
+    <div class="pmethods" style="flex-wrap:wrap;margin-bottom:10px">
+      <button class="pmb sel" data-cuenta="efectivo" onclick="_selPvPay(this)">
+        <i class="fas fa-money-bill-wave" style="color:#d97706"></i>Efectivo</button>
+      <button class="pmb" data-cuenta="nequi" onclick="_selPvPay(this)">
+        <i class="fas fa-mobile-alt" style="color:#7c3aed"></i>Nequi</button>
+      <button class="pmb" data-cuenta="bancolombia" onclick="_selPvPay(this)">
+        <i class="fas fa-university" style="color:#0284c7"></i>Bancolombia</button>
+      <button class="pmb" data-cuenta="daviplata" onclick="_selPvPay(this)">
+        <i class="fas fa-wallet" style="color:#059669"></i>Daviplata</button>
+    </div>
+
     <div class="fg">
       <label>Nota (opcional)</label>
-      <input type="text" id="pvNota" placeholder="Ej: Pago contraentrega, entregar viernes…">
+      <input type="text" id="pvNota" placeholder="Ej: Entregar el viernes, 10 unidades…">
     </div>
     <div style="background:#ede9fe;border-radius:var(--rs);padding:9px 12px;
                 font-size:.78rem;color:#5b21b6;margin-bottom:10px">
       <i class="fas fa-info-circle"></i>
-      Las entregas son <strong>parciales</strong>: cada vez que pulses «Entregar» indicas
-      cuántas unidades das ahora. El saldo queda abierto hasta completar el pedido.
+      El <strong>pago se registra ahora</strong>. La tarjeta queda en Pendientes solo para
+      hacer seguimiento de la <strong>entrega física</strong>.
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-s btn-full"
@@ -122,12 +137,19 @@ function _renderPreventaModal() {
         Cancelar
       </button>
       <button class="btn btn-p btn-full" onclick="confirmarPreventa()">
-        <i class="fas fa-save"></i> Guardar Preventa
+        <i class="fas fa-check-circle"></i> Cobrar y guardar preventa
       </button>
     </div>`;
 
+  window._pvPayMethod = 'efectivo';
   _fillClienteSuggestions(body.querySelector('#pvClientesSuggestions'));
   _calcPreventaTotal();
+}
+
+function _selPvPay(btn) {
+  document.querySelectorAll('#preventaModal .pmb').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  window._pvPayMethod = btn.getAttribute('data-cuenta');
 }
 
 function _calcPreventaTotal() {
@@ -142,8 +164,9 @@ function _calcPreventaTotal() {
 }
 
 function confirmarPreventa() {
-  const cliente = document.getElementById('pvCliente')?.value.trim();
-  const nota    = document.getElementById('pvNota')?.value.trim() || '';
+  const cliente  = document.getElementById('pvCliente')?.value.trim();
+  const nota     = document.getElementById('pvNota')?.value.trim() || '';
+  const cuentaKey = window._pvPayMethod || 'efectivo';
   if (!cliente) { notify('Ingresa el nombre del cliente', 'warning'); return; }
 
   const itemsFinal = ordenActual.map((it, idx) => {
@@ -156,24 +179,44 @@ function confirmarPreventa() {
   const concepto = itemsFinal.map(it =>
     `${it.qtyTotal}x ${it.nombre} @ $${fmt(it.precioUnit)}`).join(', ');
 
+  const fecha = fmtDateInput(new Date());
+  const hora  = new Date().toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' });
+
+  // ── Registrar ingreso inmediatamente ──
+  const txConcepto = nota
+    ? `[Preventa] ${cliente} — ${concepto} — ${nota}`
+    : `[Preventa] ${cliente} — ${concepto}`;
+  const tx = {
+    id: Date.now(), date: fecha, concept: txConcepto,
+    amount: totalPreventa, type: 'ingreso', esventa: true,
+    cliente, accKey: cuentaKey, accName: accounts[cuentaKey].name
+  };
+  accounts[cuentaKey].transactions.push(tx);
+  saveAccounts();
+  sheetsSync('venta', tx);
+
+  // ── Guardar preventa solo para seguimiento de entrega ──
   const p = {
-    id:             Date.now(),
+    id:             Date.now() + 1,
     cliente,
     concepto:       nota ? `${concepto} — ${nota}` : concepto,
     total:          totalPreventa,
     totalEntregado: 0,
     items:          itemsFinal,
     esPreventa:     true,
+    pagado:         true,          // dinero ya ingresado
+    cuentaKey,
     nota,
-    fecha:          fmtDateInput(new Date()),
-    hora:           new Date().toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })
+    fecha,
+    hora
   };
 
   pendientes.push(p);
   savePendientes(); limpiarOrden(); updatePendientesList();
   updatePendBadge(); updateClienteSuggestions();
+  updateUI(); updateCajaHdr(); updateVentasList(); loadTransactions();
   document.getElementById('preventaModal').classList.remove('active');
-  notify(`🏷️ Preventa de ${cliente} guardada — total $${fmt(totalPreventa)}`, 'success');
+  notify(`✅ Preventa cobrada — $${fmt(totalPreventa)} en ${accounts[cuentaKey].name}. Pendiente: entrega de productos.`, 'success');
   switchTab('pendientes');
 }
 
@@ -181,19 +224,12 @@ function confirmarPreventa() {
 // PREVENTA — ENTREGAR (parcial)
 // ─────────────────────────────────────────
 function abrirEntregaPreventa(id) {
-  // Buscar con comparación flexible (id puede llegar como string desde onclick)
-  const numId = Number(id);
-  const p = pendientes.find(x => Number(x.id) === numId);
-  if (!p) { notify('Preventa no encontrada', 'error'); return; }
+  const p = pendientes.find(x => x.id === id);
+  if (!p) return;
   const hayPendiente = p.items.some(it => (it.qtyEntregado || 0) < it.qtyTotal);
   if (!hayPendiente) { notify('Esta preventa ya fue entregada completamente', 'info'); return; }
-  // Cerrar cualquier modal abierto antes de abrir éste
-  document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
   _renderEntregaModal(p);
-  // Usar setTimeout para asegurar que el DOM se actualice antes de mostrar el modal
-  setTimeout(() => {
-    document.getElementById('entregaPreventaModal').classList.add('active');
-  }, 10);
+  document.getElementById('entregaPreventaModal').classList.add('active');
 }
 
 function _renderEntregaModal(p) {
@@ -261,18 +297,11 @@ function _renderEntregaModal(p) {
             color:var(--cw);font-weight:700">$ 0</span>
     </div>
 
-    <div class="stitle" style="font-size:.82rem;margin-bottom:6px">
-      <i class="fas fa-credit-card"></i> Método de pago
-    </div>
-    <div class="pmethods" style="flex-wrap:wrap;margin-bottom:12px">
-      <button class="pmb sel" data-cuenta="efectivo" onclick="selEntregaPay(this)">
-        <i class="fas fa-money-bill-wave" style="color:#d97706"></i>Efectivo</button>
-      <button class="pmb" data-cuenta="nequi" onclick="selEntregaPay(this)">
-        <i class="fas fa-mobile-alt" style="color:#7c3aed"></i>Nequi</button>
-      <button class="pmb" data-cuenta="bancolombia" onclick="selEntregaPay(this)">
-        <i class="fas fa-university" style="color:#0284c7"></i>Bancolombia</button>
-      <button class="pmb" data-cuenta="daviplata" onclick="selEntregaPay(this)">
-        <i class="fas fa-wallet" style="color:#059669"></i>Daviplata</button>
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:var(--rs);
+                padding:9px 12px;font-size:.78rem;color:#166534;margin-bottom:10px">
+      <i class="fas fa-check-circle"></i>
+      <strong>Pago ya registrado</strong> al crear la preventa.
+      Solo confirma la entrega física de los productos.
     </div>
 
     <input type="hidden" id="entregaPreventaId" value="${p.id}">
@@ -297,7 +326,7 @@ function selEntregaPay(btn) {
 }
 
 function _calcEntregaTotal(pid) {
-  const p = pendientes.find(x => Number(x.id) === Number(pid));
+  const p = pendientes.find(x => x.id == pid);
   if (!p) return;
   let total = 0;
   p.items.forEach((it, idx) => {
@@ -312,16 +341,14 @@ function _calcEntregaTotal(pid) {
 }
 
 function confirmarEntregaPreventa() {
-  const pid    = document.getElementById('entregaPreventaId')?.value;
-  const cuenta = window._entregaPayMethod || 'efectivo';
+  const pid  = document.getElementById('entregaPreventaId')?.value;
   const numPid = Number(pid);
-  const pIdx   = pendientes.findIndex(x => Number(x.id) === numPid);
+  const pIdx = pendientes.findIndex(x => Number(x.id) === numPid);
   if (pIdx === -1) return;
 
-  const p     = pendientes[pIdx];
-  const fecha = fmtDateInput(new Date());
+  const p = pendientes[pIdx];
 
-  // Recolectar cantidades
+  // Recolectar cantidades a entregar ahora
   const entregas = [];
   p.items.forEach((it, idx) => {
     const restante  = it.qtyTotal - (it.qtyEntregado || 0);
@@ -333,45 +360,33 @@ function confirmarEntregaPreventa() {
 
   if (!entregas.length) { notify('Ingresa al menos 1 unidad a entregar', 'warning'); return; }
 
-  const totalEsta = entregas.reduce((s, e) => s + e.qtyAhora * e.it.precioUnit, 0);
-  if (!totalEsta)  { notify('El total de esta entrega es $0', 'warning'); return; }
-
   // 1. Actualizar cantidades entregadas
   entregas.forEach(({ idx, qtyAhora }) => {
     pendientes[pIdx].items[idx].qtyEntregado =
       (pendientes[pIdx].items[idx].qtyEntregado || 0) + qtyAhora;
   });
-  pendientes[pIdx].totalEntregado = (pendientes[pIdx].totalEntregado || 0) + totalEsta;
+  const unidadesEsta = entregas.reduce((s, e) => s + e.qtyAhora, 0);
+  pendientes[pIdx].totalEntregado = (pendientes[pIdx].totalEntregado || 0) +
+    entregas.reduce((s, e) => s + e.qtyAhora * e.it.precioUnit, 0);
 
-  // 2. Descontar stock
+  // 2. Descontar stock (el dinero ya fue cobrado al crear la preventa)
   descontarStockPorVenta(entregas.map(({ it, qtyAhora }) => ({ ...it, qty: qtyAhora })));
 
-  // 3. Registrar ingreso
-  const detalle  = entregas.map(e => `${e.qtyAhora}x ${e.it.nombre}`).join(', ');
-  const concepto = `[Preventa] ${p.cliente} — ${detalle}`;
-  const tx = {
-    id: Date.now(), date: fecha, concept: concepto,
-    amount: totalEsta, type: 'ingreso', esventa: true,
-    cliente: p.cliente, accKey: cuenta, accName: accounts[cuenta].name
-  };
-  accounts[cuenta].transactions.push(tx);
-  saveAccounts();
-  sheetsSync('venta', tx);
-
-  // 4. ¿Completada?
+  // 3. ¿Completada? → eliminar de pendientes
   const quedanItems = pendientes[pIdx].items.some(
     it => (it.qtyEntregado || 0) < it.qtyTotal
   );
+  const detalle = entregas.map(e => `${e.qtyAhora}x ${e.it.nombre}`).join(', ');
   if (!quedanItems) {
     pendientes.splice(pIdx, 1);
-    notify(`✅ Preventa de ${p.cliente} completada · $${fmt(totalEsta)} cobrado`, 'success');
+    notify(`📦 Entrega completa — ${p.cliente} recibió todos sus productos`, 'success');
   } else {
-    const restanteTotal = pendientes[pIdx].total - pendientes[pIdx].totalEntregado;
-    notify(`📦 Entrega parcial · $${fmt(totalEsta)} · Saldo: $${fmt(restanteTotal)}`, 'success');
+    const entregadas = p.items.reduce((s, it) => s + (it.qtyEntregado || 0), 0);
+    const totalUnd   = p.items.reduce((s, it) => s + it.qtyTotal, 0);
+    notify(`📦 Entrega parcial — ${detalle} · ${entregadas}/${totalUnd} unidades en total`, 'info');
   }
 
   savePendientes();
-  updateUI(); updateCajaHdr(); updateVentasList(); loadTransactions();
   updatePendientesList(); updatePendBadge();
   document.getElementById('entregaPreventaModal').classList.remove('active');
 }
@@ -411,8 +426,8 @@ function updatePendientesList() {
           <div style="background:var(--ok);height:5px;border-radius:10px;width:${pct}%"></div>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:.7rem">
-          <span style="color:#aaa">Cobrado: $${fmt(totalEnt)}</span>
-          <span style="color:var(--cw);font-weight:600">Pendiente: $${fmt(restante)}</span>
+          <span style="color:var(--ok);font-weight:600">✅ Pagado: $${fmt(p.total)}</span>
+          <span style="color:#888">Entregado: ${p.items.reduce((s,it)=>s+(it.qtyEntregado||0),0)}/${p.items.reduce((s,it)=>s+it.qtyTotal,0)} und</span>
         </div>`;
     }
 
