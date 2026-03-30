@@ -1,16 +1,22 @@
 /* ══════════════════════════════════════════
-   caja.js — Módulo de Caja / POS  v3.0
+   caja.js — Módulo de Caja / POS  v4.0
    ─────────────────────────────────────────
-   Cambio v3.0:
-   • _renderCobroStock lee p.stock directamente (no insumos vinculados).
-   • Muestra disponible/insuficiente por producto en el modal de cobro.
+   Nuevas funcionalidades:
+   • Método de pago "Especial" (Promoción/Bono/Cumpleaños):
+     descuenta stock sin registrar ingreso de dinero.
+   • Método de pago "Consumo interno" (Entrenador/Propietario):
+     descuenta stock, registra con nombre del receptor, sin ingreso.
+   • Las preventas al cobrar usan el precioFinal de cada ítem.
    ══════════════════════════════════════════ */
 
 let ordenActual      = [];
-let selPayMethod     = 'efectivo';
+let selPayMethod     = 'efectivo';  // 'efectivo'|'nequi'|'bancolombia'|'daviplata'|'especial'|'consumo'
 let cobroEsPendiente = false;
 let cobroPendienteId = null;
 
+// ─────────────────────────────────────────
+// GRID DE PRODUCTOS
+// ─────────────────────────────────────────
 function loadProdGrid() {
   const grid = document.getElementById('prodGrid');
   grid.innerHTML = '';
@@ -80,10 +86,14 @@ function chgQty(i, d) {
 
 function limpiarOrden() {
   ordenActual = [];
-  document.getElementById('ordenCliente').value = '';
+  const cl = document.getElementById('ordenCliente');
+  if (cl) cl.value = '';
   renderOrden();
 }
 
+// ─────────────────────────────────────────
+// VENTA MANUAL RÁPIDA
+// ─────────────────────────────────────────
 function ventaManualRapida() {
   const desc     = document.getElementById('vmDesc').value.trim();
   const monto    = parseFloat(document.getElementById('vmMonto').value);
@@ -93,8 +103,8 @@ function ventaManualRapida() {
 
   const concepto = cliente ? `[${cliente}] ${desc}` : desc;
   const tx = {
-    id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: monto,
-    type: 'ingreso', esventa: true, cliente: cliente || null,
+    id: Date.now(), date: fmtDateInput(new Date()), concept: concepto,
+    amount: monto, type: 'ingreso', esventa: true, cliente: cliente || null,
     accKey: cuentaKey, accName: accounts[cuentaKey].name
   };
   accounts[cuentaKey].transactions.push(tx);
@@ -107,14 +117,21 @@ function ventaManualRapida() {
   sheetsSync('venta', tx);
 }
 
+// ─────────────────────────────────────────
+// ABRIR MODAL DE COBRO
+// ─────────────────────────────────────────
 function abrirCobro(esPendiente = false, pendId = null) {
   cobroEsPendiente = esPendiente;
   cobroPendienteId = pendId;
+
   let total = 0;
   if (esPendiente) {
     const p = pendientes.find(x => x.id === pendId);
     if (!p) return;
-    total = p.total;
+    // Si es preventa, usar precioFinal de cada ítem
+    total = p.esPreventa
+      ? (p.items || []).reduce((s, it) => s + (it.precioFinal || it.precio) * it.qty, 0)
+      : p.total;
     document.getElementById('cobroTotal').textContent = `$ ${fmt(total)}`;
   } else {
     if (!ordenActual.length && !document.getElementById('vmDesc').value) {
@@ -123,50 +140,90 @@ function abrirCobro(esPendiente = false, pendId = null) {
     total = ordenActual.reduce((s,i) => s + i.precio * i.qty, 0);
     document.getElementById('cobroTotal').textContent = `$ ${fmt(total)}`;
   }
+
   document.getElementById('cobroNota').value = '';
+
+  // Reset método de pago
   document.querySelectorAll('.pmb').forEach(b => b.classList.remove('sel'));
-  document.querySelector('.pmb[data-cuenta="efectivo"]').classList.add('sel');
+  const defBtn = document.querySelector('.pmb[data-cuenta="efectivo"]');
+  if (defBtn) defBtn.classList.add('sel');
   selPayMethod = 'efectivo';
 
-  // ── Mostrar resumen de stock disponible ───────────────────────
+  // Ocultar/resetear sección especial
+  _toggleEspecialSection(false);
+
+  // Stock resumen
   _renderCobroStock();
 
   document.getElementById('cobroModal').classList.add('active');
 }
 
-// ── Stock disponible en el modal de cobro ─────────────────────────
-// Lee directamente p.stock del producto; no depende de insumos.
+// ─────────────────────────────────────────
+// MÉTODOS DE PAGO
+// ─────────────────────────────────────────
+function selPay(btn) {
+  document.querySelectorAll('.pmb').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  selPayMethod = btn.getAttribute('data-cuenta');
+  // Mostrar sección extra para especial y consumo
+  _toggleEspecialSection(selPayMethod === 'especial' || selPayMethod === 'consumo');
+}
+
+function _toggleEspecialSection(show) {
+  const sec = document.getElementById('cobroEspecialSection');
+  if (!sec) return;
+  sec.style.display = show ? 'block' : 'none';
+  if (show) {
+    const isConsumo = selPayMethod === 'consumo';
+    document.getElementById('cobroEspecialLabel').textContent =
+      isConsumo ? 'Receptor (entrenador/propietario)' : 'Motivo (ej: Bono cumpleaños)';
+    document.getElementById('cobroEspecialInput').placeholder =
+      isConsumo ? 'Ej: Diana, Carlos...' : 'Ej: Bono cumpleaños, Promoción...';
+    document.getElementById('cobroEspecialTitle').textContent =
+      isConsumo ? '🏋️ Consumo interno' : '🎁 Entrega por promoción';
+    document.getElementById('cobroEspecialInfo').textContent =
+      isConsumo
+        ? 'Descuenta del stock sin registrar ingreso. Se guarda como "Consumo interno".'
+        : 'Descuenta del stock sin registrar ingreso. Se guarda como "Promoción/Bono".';
+  }
+}
+
+// ─────────────────────────────────────────
+// STOCK EN MODAL DE COBRO
+// ─────────────────────────────────────────
 function _renderCobroStock() {
   const prev = document.getElementById('cobroStockResumen');
   if (prev) prev.remove();
-  if (!ordenActual.length) return;
 
-  // Solo mostrar si al menos un producto controla stock
-  const itemsConStock = ordenActual.filter(it => {
+  // Determinar items a revisar
+  let items = [];
+  if (cobroEsPendiente) {
+    const p = pendientes.find(x => x.id === cobroPendienteId);
+    items = p ? (p.items || []) : [];
+  } else {
+    items = ordenActual;
+  }
+  if (!items.length) return;
+
+  const itemsConStock = items.filter(it => {
     const p = getProds().find(x => x.id === it.id);
     return p && p.stock !== null && p.stock !== undefined;
   });
   if (!itemsConStock.length) return;
 
   let hayProblema = false;
-  const rows = ordenActual.map(it => {
+  const rows = items.map(it => {
     const p = getProds().find(x => x.id === it.id);
     if (!p || p.stock === null || p.stock === undefined) return null;
 
-    const disponible    = p.stock || 0;
-    const insuficiente  = disponible < it.qty;
+    const disponible   = p.stock || 0;
+    const insuficiente = disponible < it.qty;
     if (insuficiente) hayProblema = true;
 
-    const color = disponible <= 0
-      ? 'var(--err)'
-      : insuficiente
-        ? 'var(--warn)'
-        : 'var(--ok)';
-    const label = disponible <= 0
-      ? '🚫 Sin stock'
-      : insuficiente
-        ? `⚠️ Solo ${disponible} disponibles`
-        : `✅ ${disponible} disponibles`;
+    const color = disponible <= 0 ? 'var(--err)' : insuficiente ? 'var(--warn)' : 'var(--ok)';
+    const label = disponible <= 0 ? '🚫 Sin stock'
+                : insuficiente   ? `⚠️ Solo ${disponible} disponibles`
+                : `✅ ${disponible} disponibles`;
 
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--cream)">
       <span style="font-size:.8rem">${p.emoji||'☕'} ${p.nombre} × ${it.qty}</span>
@@ -191,51 +248,122 @@ function _renderCobroStock() {
   if (mbody && totalEl) totalEl.insertAdjacentElement('afterend', section);
 }
 
-function selPay(btn) {
-  document.querySelectorAll('.pmb').forEach(b => b.classList.remove('sel'));
-  btn.classList.add('sel');
-  selPayMethod = btn.getAttribute('data-cuenta');
-}
-
+// ─────────────────────────────────────────
+// CONFIRMAR COBRO
+// ─────────────────────────────────────────
 function confirmarCobro() {
-  const nota = document.getElementById('cobroNota').value;
+  const nota        = document.getElementById('cobroNota').value.trim();
+  const especialVal = document.getElementById('cobroEspecialInput')?.value.trim() || '';
+  const esEspecial  = selPayMethod === 'especial';
+  const esConsumo   = selPayMethod === 'consumo';
+  const esSinIngreso = esEspecial || esConsumo;
+
+  // Validar campo especial si aplica
+  if (esSinIngreso && !especialVal) {
+    notify(esConsumo ? 'Ingresa el nombre del receptor' : 'Ingresa el motivo', 'warning');
+    return;
+  }
+
   let total = 0, concepto = '', cliente = '';
+  let itemsVendidos = [];
 
   if (cobroEsPendiente) {
     const p = pendientes.find(x => x.id === cobroPendienteId);
     if (!p) return;
-    total = p.total; concepto = p.concepto; cliente = p.cliente || '';
+    cliente       = p.cliente || '';
+    itemsVendidos = p.items || [];
+
+    // Preventa: usar precioFinal por ítem
+    if (p.esPreventa) {
+      total   = itemsVendidos.reduce((s, it) => s + (it.precioFinal || it.precio) * it.qty, 0);
+      concepto = itemsVendidos.map(it => `${it.qty}x ${it.nombre} ($${fmt(it.precioFinal || it.precio)})`).join(', ');
+    } else {
+      total   = p.total;
+      concepto = p.concepto;
+    }
     pendientes = pendientes.filter(x => x.id !== cobroPendienteId);
     savePendientes(); updatePendientesList(); updatePendBadge();
   } else {
-    cliente  = document.getElementById('ordenCliente').value.trim();
-    concepto = ordenActual.length ? ordenActual.map(i => `${i.qty}x ${i.nombre}`).join(', ') : 'Venta manual';
+    cliente       = document.getElementById('ordenCliente').value.trim();
+    itemsVendidos = [...ordenActual];
+    total         = itemsVendidos.reduce((s,i) => s + i.precio * i.qty, 0);
+    concepto      = itemsVendidos.length ? itemsVendidos.map(i => `${i.qty}x ${i.nombre}`).join(', ') : 'Venta manual';
     if (cliente) concepto = `[${cliente}] ${concepto}`;
     if (nota)    concepto += ` (${nota})`;
-    total = ordenActual.reduce((s,i) => s + i.precio * i.qty, 0);
-    if (!total) { notify('Sin monto a cobrar', 'warning'); return; }
+    if (!total)  { notify('Sin monto a cobrar', 'warning'); return; }
   }
 
-  const tx = {
-    id: Date.now(), date: fmtDateInput(new Date()), concept: concepto, amount: total,
-    type: 'ingreso', esventa: true, cliente: cliente || null,
-    accKey: selPayMethod, accName: accounts[selPayMethod].name
-  };
-  accounts[selPayMethod].transactions.push(tx);
-
-  // ── Descontar stock de productos vendidos ─────────────────────
-  if (!cobroEsPendiente && ordenActual.length) {
-    descontarStockPorVenta(ordenActual);
+  // ── Descontar stock siempre que haya ítems ──────────────────────
+  if (itemsVendidos.length) {
+    descontarStockPorVenta(itemsVendidos);
   }
 
-  saveAccounts();
-  updateUI(); updateCajaHdr(); updateVentasList(); loadTransactions();
-  document.getElementById('cobroModal').classList.remove('active');
-  limpiarOrden();
-  notify(`✅ $${fmt(total)} cobrado en ${accounts[selPayMethod].name}`, 'success');
-  sheetsSync('venta', tx);
+  // ── Registrar según tipo de pago ────────────────────────────────
+  if (esSinIngreso) {
+    // Promoción o consumo interno: no registra ingreso, solo movimiento de stock
+    // Se registra como gasto/egreso con monto 0 para trazabilidad
+    const tipoLabel  = esConsumo ? `Consumo interno (${especialVal})` : `Promoción: ${especialVal}`;
+    const conceptoFull = `${tipoLabel} — ${concepto}`;
+
+    // Gasto $0 para aparecer en historial de movimientos
+    const mov = {
+      id:        Date.now(),
+      concepto:  conceptoFull,
+      monto:     0,
+      categoria: esConsumo ? 'Consumo Interno' : 'Promoción',
+      cuenta:    'efectivo',  // no afecta saldo
+      fecha:     fmtDateInput(new Date()),
+      nota:      `Sin ingreso · ${especialVal}`
+    };
+    // Solo guardamos en historial de movimientos como referencia
+    // (no en gastos para no distorsionar el reporte)
+    const refTx = {
+      id:      Date.now() + 1,
+      date:    fmtDateInput(new Date()),
+      concept: conceptoFull,
+      amount:  0,
+      type:    esConsumo ? 'consumo_interno' : 'promocion',
+      esventa: false,
+      cliente: esConsumo ? especialVal : (cliente || null),
+      accKey:  'efectivo',
+      accName: 'Efectivo'
+    };
+    // No sumamos al balance (amount=0) pero queda en historial
+    accounts['efectivo'].transactions.push(refTx);
+    saveAccounts();
+    updateUI(); updateCajaHdr(); updateVentasList(); loadTransactions();
+    document.getElementById('cobroModal').classList.remove('active');
+    limpiarOrden();
+    const iconLabel = esConsumo ? '🏋️' : '🎁';
+    notify(`${iconLabel} Entrega registrada sin ingreso — ${especialVal}`, 'success');
+    sheetsSync('transaccion', refTx);
+
+  } else {
+    // Cobro normal
+    const tx = {
+      id:      Date.now(), date: fmtDateInput(new Date()), concept: concepto,
+      amount:  total, type: 'ingreso', esventa: true,
+      cliente: cliente || null, accKey: selPayMethod, accName: accounts[selPayMethod].name
+    };
+    accounts[selPayMethod].transactions.push(tx);
+    saveAccounts();
+    updateUI(); updateCajaHdr(); updateVentasList(); loadTransactions();
+    document.getElementById('cobroModal').classList.remove('active');
+    limpiarOrden();
+    notify(`✅ $${fmt(total)} cobrado en ${accounts[selPayMethod].name}`, 'success');
+    sheetsSync('venta', tx);
+  }
+
+  // Reset sección especial
+  if (document.getElementById('cobroEspecialInput')) {
+    document.getElementById('cobroEspecialInput').value = '';
+  }
+  _toggleEspecialSection(false);
 }
 
+// ─────────────────────────────────────────
+// ENCABEZADO Y LISTA DE VENTAS
+// ─────────────────────────────────────────
 function updateCajaHdr() {
   const today = fmtDateInput(new Date());
   let v = 0, cnt = 0;
@@ -244,42 +372,65 @@ function updateCajaHdr() {
       if (tx.date === today && tx.amount > 0 && tx.esventa) { v += tx.amount; cnt++; }
     });
   }
-  document.getElementById('ventasHoy').textContent    = `$ ${fmt(v)}`;
-  document.getElementById('txHoy').textContent        = cnt;
+  document.getElementById('ventasHoy').textContent     = `$ ${fmt(v)}`;
+  document.getElementById('txHoy').textContent         = cnt;
   document.getElementById('cajaPendCount').textContent = pendientes.length;
 }
 
 function updateVentasList() {
   const list  = document.getElementById('ventasList');
   const today = fmtDateInput(new Date());
+
   let vs = [];
   for (const k in accounts) {
-    accounts[k].transactions.forEach(tx => { if (tx.date === today && tx.esventa) vs.push({ ...tx, accKey: k }); });
+    accounts[k].transactions.forEach(tx => {
+      if (tx.date === today && (tx.esventa || tx.type === 'consumo_interno' || tx.type === 'promocion'))
+        vs.push({ ...tx, accKey: k });
+    });
   }
   vs.sort((a,b) => b.id - a.id);
-  if (!vs.length) { list.innerHTML = `<div class="empty"><i class="fas fa-coffee"></i><h3>Sin ventas hoy</h3></div>`; return; }
+
+  if (!vs.length) {
+    list.innerHTML = `<div class="empty"><i class="fas fa-coffee"></i><h3>Sin ventas hoy</h3></div>`;
+    return;
+  }
+
   list.innerHTML = '';
   vs.forEach(v => {
+    const isPromo   = v.type === 'promocion';
+    const isConsumo = v.type === 'consumo_interno';
+    const badge = isPromo
+      ? '<span style="font-size:.65rem;background:#d97706;color:white;padding:1px 6px;border-radius:8px;margin-left:5px">🎁 PROMO</span>'
+      : isConsumo
+        ? '<span style="font-size:.65rem;background:#059669;color:white;padding:1px 6px;border-radius:8px;margin-left:5px">🏋️ INTERNO</span>'
+        : '';
     const d = document.createElement('div');
     d.className = 'vi';
     d.innerHTML = `
       <div style="flex:1">
-        <div class="vi-concept">${v.concept}</div>
-        <div class="vi-meta">${accounts[v.accKey].name}</div>
+        <div class="vi-concept">${v.concept}${badge}</div>
+        <div class="vi-meta">${(isPromo||isConsumo) ? 'Sin ingreso' : accounts[v.accKey]?.name || v.accKey}</div>
       </div>
-      <div class="vi-amount positive">$ ${fmt(v.amount)}</div>
-      <div class="vi-actions"><button class="btn btn-sm btn-d" onclick="eliminarTx('${v.accKey}',${v.id})"><i class="fas fa-trash"></i></button></div>`;
+      <div class="vi-amount ${(isPromo||isConsumo) ? '' : 'positive'}">
+        ${(isPromo||isConsumo) ? '<span style="color:#aaa;font-size:.8rem">— stock</span>' : `$ ${fmt(v.amount)}`}
+      </div>
+      <div class="vi-actions">
+        <button class="btn btn-sm btn-d" onclick="eliminarTx('${v.accKey}',${v.id})"><i class="fas fa-trash"></i></button>
+      </div>`;
     list.appendChild(d);
   });
 }
 
+// ─────────────────────────────────────────
+// CIERRE DE CAJA (sin cambios de lógica)
+// ─────────────────────────────────────────
 function cerrarCaja() {
   const today = fmtDateInput(new Date());
   let tv = 0, cv = 0;
   const pc = {};
   for (const k in accounts) {
     accounts[k].transactions.forEach(tx => {
-      if (tx.date === today && tx.esventa && tx.type !== 'transferencia') {
+      if (tx.date === today && tx.esventa && tx.type !== 'transferencia' && tx.amount > 0) {
         tv += tx.amount; cv++;
         pc[accounts[k].name] = (pc[accounts[k].name] || 0) + tx.amount;
       }
@@ -295,6 +446,15 @@ function cerrarCaja() {
        <span>${n}</span><strong>$ ${fmt(v)}</strong>
      </div>`).join('');
 
+  // Contar entregas sin ingreso del día
+  let entregasSinIngreso = 0;
+  for (const k in accounts) {
+    accounts[k].transactions.forEach(tx => {
+      if (tx.date === today && (tx.type === 'consumo_interno' || tx.type === 'promocion'))
+        entregasSinIngreso++;
+    });
+  }
+
   document.getElementById('cierreCajaContent').innerHTML = `
     <div style="text-align:center;margin-bottom:16px">
       <div style="font-size:.75rem;color:#888">${new Date().toLocaleDateString('es-CO',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
@@ -308,6 +468,10 @@ function cerrarCaja() {
         <span>Gastos del día</span><span class="negative">- $ ${fmt(todayGastos)}</span>
       </div>
     </div>
+    ${entregasSinIngreso > 0 ? `
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:var(--r);padding:10px 13px;margin-bottom:12px">
+      <div style="font-size:.82rem;color:#166534"><i class="fas fa-gift"></i> ${entregasSinIngreso} entrega${entregasSinIngreso!==1?'s':''} sin ingreso (promos/internos)</div>
+    </div>` : ''}
     ${pendCount > 0 ? `
     <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:var(--r);padding:13px;margin-bottom:12px">
       <div style="font-size:.82rem;font-weight:600;color:#b8860b;margin-bottom:4px">
