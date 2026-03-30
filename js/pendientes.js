@@ -411,10 +411,10 @@ function updatePendientesList() {
     // Barra de progreso solo para preventas
     let progressHtml = '';
     if (esPrev) {
-      const totalEnt = p.totalEntregado || 0;
-      const pct      = p.total > 0 ? Math.round((totalEnt / p.total) * 100) : 0;
-      const restante = p.total - totalEnt;
-      const itemRows = p.items.map(it => {
+      const totalUnd  = p.items.reduce((s, it) => s + it.qtyTotal, 0);
+      const entUnd    = p.items.reduce((s, it) => s + (it.qtyEntregado || 0), 0);
+      const pct       = totalUnd > 0 ? Math.round((entUnd / totalUnd) * 100) : 0;
+      const itemRows  = p.items.map(it => {
         const ent  = it.qtyEntregado || 0;
         const rest = it.qtyTotal - ent;
         return `<span style="font-size:.72rem;color:${rest<=0?'var(--ok)':'#888'}">${it.emoji||'☕'} ${ent}/${it.qtyTotal}${rest<=0?' ✅':''}</span>`;
@@ -422,13 +422,10 @@ function updatePendientesList() {
 
       progressHtml = `
         <div style="margin:6px 0 2px">${itemRows}</div>
-        <div style="background:#e9e9e9;border-radius:10px;height:5px;margin:4px 0 2px;overflow:hidden">
-          <div style="background:var(--ok);height:5px;border-radius:10px;width:${pct}%"></div>
+        <div style="background:#e9e9e9;border-radius:10px;height:6px;margin:5px 0 3px;overflow:hidden">
+          <div style="background:var(--ok);height:6px;border-radius:10px;width:${pct}%;transition:width .3s"></div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:.7rem">
-          <span style="color:var(--ok);font-weight:600">✅ Pagado: $${fmt(p.total)}</span>
-          <span style="color:#888">Entregado: ${p.items.reduce((s,it)=>s+(it.qtyEntregado||0),0)}/${p.items.reduce((s,it)=>s+it.qtyTotal,0)} und</span>
-        </div>`;
+        <div style="font-size:.7rem;color:#888;text-align:right">${entUnd}/${totalUnd} unidades entregadas</div>`;
     }
 
     d.innerHTML = `
@@ -436,11 +433,15 @@ function updatePendientesList() {
         <div>
           <div class="pc-name">
             <i class="fas fa-user" style="color:var(--cw);margin-right:5px"></i>${p.cliente}
-            ${esPrev ? '<span class="badge" style="background:#7c3aed;color:white;font-size:.65rem;padding:2px 7px;border-radius:10px;margin-left:6px">PREVENTA</span>' : ''}
+            ${esPrev
+              ? '<span class="badge" style="background:#7c3aed;color:white;font-size:.65rem;padding:2px 7px;border-radius:10px;margin-left:4px">PREVENTA</span>'
+              : ''}
           </div>
           <div class="pc-time">${p.fecha} ${p.hora || ''}</div>
         </div>
-        <div class="pc-total">$ ${fmt(p.total)}</div>
+        ${esPrev
+          ? '<span style="background:#f0fdf4;color:var(--ok);font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:10px;border:1px solid #86efac">✅ PAGADO</span>'
+          : `<div class="pc-total">$ ${fmt(p.total)}</div>`}
       </div>
       <div class="pc-items" style="font-size:.78rem;color:#888;margin:4px 0">${p.concepto}</div>
       ${progressHtml}
@@ -448,7 +449,7 @@ function updatePendientesList() {
         ${esPrev
           ? `<button class="btn btn-ok btn-sm" onclick="abrirEntregaPreventa(${p.id})"><i class="fas fa-box-open"></i> Entregar</button>`
           : `<button class="btn btn-ok btn-sm" onclick="cobrarPendiente(${p.id})"><i class="fas fa-money-bill-wave"></i> Cobrar</button>`}
-        <button class="btn btn-warn btn-sm" onclick="moverACreditoPendiente(${p.id})"><i class="fas fa-user-clock"></i> A Crédito</button>
+        ${!esPrev ? `<button class="btn btn-warn btn-sm" onclick="moverACreditoPendiente(${p.id})"><i class="fas fa-user-clock"></i> A Crédito</button>` : ''}
         <button class="btn btn-d btn-sm" onclick="eliminarPendiente(${p.id})"><i class="fas fa-trash"></i></button>
       </div>`;
     list.appendChild(d);
