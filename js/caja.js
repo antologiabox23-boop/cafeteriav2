@@ -472,13 +472,20 @@ function cerrarCaja() {
     <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:var(--r);padding:10px 13px;margin-bottom:12px">
       <div style="font-size:.82rem;color:#166534"><i class="fas fa-gift"></i> ${entregasSinIngreso} entrega${entregasSinIngreso!==1?'s':''} sin ingreso (promos/internos)</div>
     </div>` : ''}
-    ${pendCount > 0 ? `
+    ${pendCount > 0 ? (() => {
+      const normales  = pendientes.filter(p => !p.esPreventa).length;
+      const prevs     = pendientes.filter(p => !!p.esPreventa).length;
+      const partes    = [];
+      if (normales > 0) partes.push(`${normales} pendiente${normales!==1?'s':''} pasará${normales!==1?'n':''} a <strong>Créditos</strong>`);
+      if (prevs    > 0) partes.push(`${prevs} preventa${prevs!==1?'s':''} quedará${prevs!==1?'n':''} abiertas`);
+      return `
     <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:var(--r);padding:13px;margin-bottom:12px">
       <div style="font-size:.82rem;font-weight:600;color:#b8860b;margin-bottom:4px">
         <i class="fas fa-clock"></i> ${pendCount} pendiente${pendCount!==1?'s':''} sin cobrar — $ ${fmt(pendTotal)}
       </div>
-      <div style="font-size:.78rem;color:#888">Al confirmar el cierre pasarán automáticamente a <strong>Créditos</strong>.</div>
-    </div>` : ''}
+      <div style="font-size:.78rem;color:#888">Al confirmar el cierre: ${partes.join(' · ')}.</div>
+    </div>`;
+    })() : ''}
     ${totCred > 0 ? `
     <div style="background:var(--latte);border-radius:var(--r);padding:10px 13px;margin-bottom:12px;display:flex;justify-content:space-between">
       <span style="font-size:.82rem">Total créditos activos</span>
@@ -531,6 +538,8 @@ function _confirmarCierre() {
 
   let movidos = 0;
   pendientes.forEach(p => {
+    // Las preventas NO se mueven a créditos en el cierre — quedan abiertas
+    if (p.esPreventa) return;
     creditos.push({
       id: Date.now() + movidos, cliente: p.cliente, deuda: p.total,
       desc: `[Cierre ${today}] ${p.concepto}`, fecha: p.fecha, pagos: []
@@ -538,8 +547,9 @@ function _confirmarCierre() {
     sheetsSync('credito', creditos[creditos.length - 1]);
     movidos++;
   });
-  const pendMovidos = pendientes.length;
-  pendientes = [];
+  const pendMovidos = movidos;
+  // Eliminar solo los pendientes normales; las preventas permanecen
+  pendientes = pendientes.filter(p => !!p.esPreventa);
   savePendientes(); saveCreditos();
 
   if (base > 0) {
@@ -568,6 +578,10 @@ function _confirmarCierre() {
       ${pendMovidos > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--cream)">
         <span style="font-size:.82rem"><i class="fas fa-user-clock" style="color:var(--warn)"></i> Pendientes → Créditos</span>
         <strong style="font-size:.82rem">${pendMovidos} movido${pendMovidos!==1?'s':''}</strong>
+      </div>` : ''}
+      ${pendientes.length > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--cream)">
+        <span style="font-size:.82rem"><i class="fas fa-tag" style="color:#7c3aed"></i> Preventas activas (no se mueven)</span>
+        <strong style="font-size:.82rem" style="color:#7c3aed">${pendientes.length}</strong>
       </div>` : ''}
       ${base > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0">
         <span style="font-size:.82rem"><i class="fas fa-money-bill-wave" style="color:var(--ok)"></i> Base efectivo mañana</span>
