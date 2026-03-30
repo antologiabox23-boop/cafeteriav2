@@ -100,7 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('gastoModal').classList.remove('active');
       notify(editingGastoId ? 'Gasto actualizado' : '✅ Gasto registrado', 'success');
       editingGastoId = null;
-      sheetsSync('gasto', { concepto, monto, categoria, cuenta, fecha });
+      // Sincronizar el gasto recién creado/editado (con su id)
+      const gastoSyncObj = editingGastoId
+        ? gastos.find(g => g.id == editingGastoId)
+        : gastos[gastos.length - 1];
+      if (gastoSyncObj) sheetsSync('gasto', gastoSyncObj);
     });
   }
 
