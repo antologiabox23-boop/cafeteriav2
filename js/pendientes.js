@@ -181,12 +181,19 @@ function confirmarPreventa() {
 // PREVENTA — ENTREGAR (parcial)
 // ─────────────────────────────────────────
 function abrirEntregaPreventa(id) {
-  const p = pendientes.find(x => x.id === id);
-  if (!p) return;
+  // Buscar con comparación flexible (id puede llegar como string desde onclick)
+  const numId = Number(id);
+  const p = pendientes.find(x => Number(x.id) === numId);
+  if (!p) { notify('Preventa no encontrada', 'error'); return; }
   const hayPendiente = p.items.some(it => (it.qtyEntregado || 0) < it.qtyTotal);
   if (!hayPendiente) { notify('Esta preventa ya fue entregada completamente', 'info'); return; }
+  // Cerrar cualquier modal abierto antes de abrir éste
+  document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
   _renderEntregaModal(p);
-  document.getElementById('entregaPreventaModal').classList.add('active');
+  // Usar setTimeout para asegurar que el DOM se actualice antes de mostrar el modal
+  setTimeout(() => {
+    document.getElementById('entregaPreventaModal').classList.add('active');
+  }, 10);
 }
 
 function _renderEntregaModal(p) {
@@ -290,7 +297,7 @@ function selEntregaPay(btn) {
 }
 
 function _calcEntregaTotal(pid) {
-  const p = pendientes.find(x => x.id == pid);
+  const p = pendientes.find(x => Number(x.id) === Number(pid));
   if (!p) return;
   let total = 0;
   p.items.forEach((it, idx) => {
@@ -307,7 +314,8 @@ function _calcEntregaTotal(pid) {
 function confirmarEntregaPreventa() {
   const pid    = document.getElementById('entregaPreventaId')?.value;
   const cuenta = window._entregaPayMethod || 'efectivo';
-  const pIdx   = pendientes.findIndex(x => x.id == pid);
+  const numPid = Number(pid);
+  const pIdx   = pendientes.findIndex(x => Number(x.id) === numPid);
   if (pIdx === -1) return;
 
   const p     = pendientes[pIdx];
@@ -381,7 +389,7 @@ function updatePendientesList() {
   }
   list.innerHTML = '';
   pendientes.forEach(p => {
-    const esPrev = !!p.esPreventa;
+    const esPrev = p.esPreventa === true || p.esPreventa === 1 || p.esPreventa === 'true';
     const d = document.createElement('div');
     d.className = 'pending-card';
 
