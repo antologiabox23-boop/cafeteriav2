@@ -15,21 +15,47 @@ function updateUI() {
     }
   }
 
-  // Header: saldo del día = ventas hoy - gastos hoy (excluye transferencias y base_caja)
+  // ── Saldo del día (informativo, no modifica cuentas) ──────────
+  // = base asignada al inicio del día + ingresos hoy − gastos hoy
+  // Si no hubo cierre ayer, la base es el saldo real de efectivo al final del día anterior.
   const today = typeof fmtDateInput === 'function' ? fmtDateInput(new Date()) : new Date().toISOString().slice(0,10);
-  let ventasHoy = 0, gastosHoy = 0;
+
+  // Base del día: último cierre registrado (puede ser de ayer o días anteriores)
+  let baseDia = 0;
+  if (typeof cierres !== 'undefined' && cierres.length) {
+    // Tomar el cierre más reciente anterior a hoy
+    const cierreAnterior = [...cierres]
+      .filter(c => c.fecha < today)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+    if (cierreAnterior) {
+      baseDia = cierreAnterior.baseEfectivo || 0;
+    } else {
+      // Primer día sin cierre previo: usar saldo real de efectivo antes de hoy
+      baseDia = accounts['efectivo']?.transactions
+        .filter(t => t.date < today)
+        .reduce((s, t) => s + t.amount, 0) || 0;
+    }
+  } else {
+    // Sin ningún cierre registrado: saldo efectivo acumulado hasta ayer
+    baseDia = accounts['efectivo']?.transactions
+      .filter(t => t.date < today)
+      .reduce((s, t) => s + t.amount, 0) || 0;
+  }
+
+  // Ingresos y gastos de hoy
+  let ingresosHoy = 0, gastosHoy = 0;
   for (const k in accounts) {
     accounts[k].transactions.forEach(t => {
       if (t.date !== today) return;
       if (t.type === 'transferencia' || t.type === 'base_caja') return;
-      if (t.amount >= 0) ventasHoy += t.amount;
+      if (t.amount > 0) ingresosHoy += t.amount;
       else gastosHoy += Math.abs(t.amount);
     });
   }
   if (typeof gastos !== 'undefined') {
     gastos.filter(g => g.fecha === today).forEach(g => gastosHoy += g.monto);
   }
-  const saldoDia = ventasHoy - gastosHoy;
+  const saldoDia = baseDia + ingresosHoy - gastosHoy;
 
   const totalEl = document.getElementById('totalGeneral');
   if (totalEl) {
