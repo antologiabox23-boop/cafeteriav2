@@ -203,10 +203,19 @@ function sheetsSync(tipo, obj) {
       case 'stockmov':
         if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.STOCK_MOVS, obj);
         break;
+
+
+
       case 'producto':
-        // updateRow actualiza la fila existente (stock, precio, etc.)
-        if (obj && obj.id) Sheets.updateRow(Sheets.HOJAS.PRODUCTOS, obj.id, obj);
+        if (obj && obj.id) {
+          if (obj._isNew) Sheets.appendRow(Sheets.HOJAS.PRODUCTOS, obj);
+          else Sheets.updateRow(Sheets.HOJAS.PRODUCTOS, obj.id, obj);
+        }
         break;
+      case 'cierre':
+        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.CIERRES, obj);
+        break;
+
     }
   } catch (e) {
     console.warn('[sheetsSync]', tipo, e.message);

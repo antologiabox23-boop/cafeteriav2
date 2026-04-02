@@ -578,6 +578,7 @@ function _confirmarCierre(efectivoReal = 0) {
   };
   cierres.push(cierre);
   saveCierres();
+  sheetsSync('cierre', cierre);
 
   // ── Actualizar UI sin modificar cuentas ──
   updateUI(); updatePendientesList(); updatePendBadge();

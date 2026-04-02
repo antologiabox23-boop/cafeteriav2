@@ -177,13 +177,20 @@ document.addEventListener('DOMContentLoaded', () => {
                      : Math.max(0, parseFloat(stockRaw) || 0);
 
     const prods = getProds();
+    let syncProd = null;
     if (editingProdId) {
       const idx = prods.findIndex(p => p.id === editingProdId);
-      if (idx > -1) prods[idx] = { ...prods[idx], nombre, precio, emoji, stock };
+      if (idx > -1) {
+        prods[idx] = { ...prods[idx], nombre, precio, emoji, stock };
+        syncProd = prods[idx]; // edición → updateRow
+      }
     } else {
-      prods.push({ id: Date.now(), nombre, precio, emoji, stock });
+      const newProd = { id: Date.now(), nombre, precio, emoji, stock };
+      prods.push(newProd);
+      syncProd = { ...newProd, _isNew: true }; // nuevo → appendRow
     }
     saveProds(prods);
+    if (syncProd) sheetsSync('producto', syncProd);
     loadProdsManager();
     loadProdGrid();
     if (typeof renderProductosInv === 'function') renderProductosInv();
