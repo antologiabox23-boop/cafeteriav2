@@ -125,9 +125,12 @@ function confirmarAbono() {
   const c = creditos[idx];
   creditos[idx].pagos.push({ monto, cuenta, fecha: fmtDateInput(new Date()), nota });
 
-  const tx = { id: Date.now(), date: fmtDateInput(new Date()), concept: `Abono crédito - ${c.cliente}${nota ? ' ('+nota+')' : ''}`, amount: monto, type: 'ingreso', esventa: false };
+  const tx = { id: Date.now(), date: fmtDateInput(new Date()), concept: `Abono crédito - ${c.cliente}${nota ? ' ('+nota+')' : ''}`, amount: monto, type: 'ingreso', esventa: false, accKey: cuenta, accName: accounts[cuenta].name };
   accounts[cuenta].transactions.push(tx);
   saveCreditos(); saveAccounts();
+  // FIX: sincronizar crédito actualizado (con el nuevo pago) y la transacción de ingreso
+  sheetsSync('credito', creditos[idx]);
+  sheetsSync('transaccion', tx);
   updateUI(); updateCreditosList(); loadTransactions(); updateCajaHdr();
   document.getElementById('abonoModal').classList.remove('active');
   notify(`✅ Abono de $${fmt(monto)} registrado`, 'success');
@@ -137,11 +140,17 @@ function eliminarCredito(cid) {
   if (!confirm('¿Eliminar este registro de crédito?')) return;
   creditos = creditos.filter(x => x.id != cid);
   saveCreditos(); updateCreditosList();
+  // FIX: sincronizar eliminación con Sheets
+  Sheets.deleteRow(Sheets.HOJAS.CREDITOS, cid);
   notify('Crédito eliminado', 'info');
 }
 
 function eliminarCreditoGrupo(nombreLower) {
   if (!confirm('¿Eliminar todos los registros de crédito de este cliente?')) return;
+  // FIX: eliminar cada crédito del grupo en Sheets antes de filtrar
+  creditos
+    .filter(c => c.cliente.trim().toLowerCase() === nombreLower)
+    .forEach(c => Sheets.deleteRow(Sheets.HOJAS.CREDITOS, c.id));
   creditos = creditos.filter(c => c.cliente.trim().toLowerCase() !== nombreLower);
   saveCreditos(); updateCreditosList();
   notify('Créditos eliminados', 'info');
@@ -158,8 +167,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const desc = document.getElementById('creditoDesc').value.trim();
       const fecha = document.getElementById('creditoFecha').value;
       if (!cliente || !deuda || !desc) { notify('Completa todos los campos', 'warning'); return; }
-      creditos.push({ id: Date.now(), cliente, deuda, desc, fecha, pagos: [] });
+      const nuevoCred = { id: Date.now(), cliente, deuda, desc, fecha, pagos: [] };
+      creditos.push(nuevoCred);
       saveCreditos(); updateCreditosList(); updateClienteSuggestions();
+      // FIX: sincronizar nuevo crédito con Sheets
+      sheetsSync('credito', nuevoCred);
       document.getElementById('creditoModal').classList.remove('active');
       notify('Crédito registrado', 'success');
     });

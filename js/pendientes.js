@@ -39,9 +39,12 @@ function confirmarGuardarPendienteConNombre() {
   if (_pendingOrdenSnapshot) { ordenActual = [..._pendingOrdenSnapshot]; _pendingOrdenSnapshot = null; }
   const yaExiste = creditos.some(c => c.cliente.toLowerCase() === nombre.toLowerCase());
   if (!yaExiste) {
-    creditos.push({ id: Date.now(), cliente: nombre, deuda: 0,
-      desc: 'Cliente registrado al guardar pendiente', fecha: fmtDateInput(new Date()), pagos: [] });
+    const credAuto = { id: Date.now(), cliente: nombre, deuda: 0,
+      desc: 'Cliente registrado al guardar pendiente', fecha: fmtDateInput(new Date()), pagos: [] };
+    creditos.push(credAuto);
     saveCreditos(); updateCreditosList();
+    // FIX: sincronizar cliente auto-creado con Sheets
+    sheetsSync('credito', credAuto);
   }
   _guardarPendienteConCliente(nombre);
 }
@@ -58,6 +61,8 @@ function _guardarPendienteConCliente(cliente) {
   pendientes.push(p);
   savePendientes(); limpiarOrden(); updatePendientesList();
   updatePendBadge(); updateClienteSuggestions();
+  // FIX: sincronizar nuevo pendiente con Sheets
+  sheetsSync('pendiente', p);
   notify(`⏳ Pedido de ${p.cliente} guardado como pendiente`, 'info');
   switchTab('pendientes');
 }
@@ -469,10 +474,14 @@ function moverACreditoPendiente(id) {
   const p = pendientes.find(x => x.id === id);
   if (!p) return;
   const restante = p.esPreventa ? (p.total - (p.totalEntregado || 0)) : p.total;
-  creditos.push({ id: Date.now(), cliente: p.cliente, deuda: restante,
-                  desc: p.concepto, fecha: p.fecha, pagos: [] });
+  const nuevoCred = { id: Date.now(), cliente: p.cliente, deuda: restante,
+                  desc: p.concepto, fecha: p.fecha, pagos: [] };
+  creditos.push(nuevoCred);
   pendientes = pendientes.filter(x => x.id !== id);
   saveCreditos(); savePendientes();
+  // FIX: sincronizar nuevo crédito y eliminación del pendiente con Sheets
+  sheetsSync('credito', nuevoCred);
+  Sheets.deleteRow(Sheets.HOJAS.PENDIENTES, id);
   updatePendientesList(); updatePendBadge(); updateCreditosList();
   notify(`💳 Pedido de ${p.cliente} movido a crédito`, 'info');
 }
@@ -481,6 +490,8 @@ function eliminarPendiente(id) {
   if (!confirm('¿Eliminar este pendiente?')) return;
   pendientes = pendientes.filter(x => x.id !== id);
   savePendientes(); updatePendientesList(); updatePendBadge();
+  // FIX: sincronizar eliminación con Sheets
+  Sheets.deleteRow(Sheets.HOJAS.PENDIENTES, id);
   notify('Pendiente eliminado', 'info');
 }
 

@@ -42,7 +42,8 @@ function updateUI() {
       .reduce((s, t) => s + t.amount, 0) || 0;
   }
 
-  // Ingresos y gastos de hoy
+  // Ingresos y gastos de hoy — las transacciones de gastos ya están en accounts[k].transactions
+  // con amount negativo, así que NO hay que sumar gastos[] por separado (doble conteo)
   let ingresosHoy = 0, gastosHoy = 0;
   for (const k in accounts) {
     accounts[k].transactions.forEach(t => {
@@ -51,9 +52,6 @@ function updateUI() {
       if (t.amount > 0) ingresosHoy += t.amount;
       else gastosHoy += Math.abs(t.amount);
     });
-  }
-  if (typeof gastos !== 'undefined') {
-    gastos.filter(g => g.fecha === today).forEach(g => gastosHoy += g.monto);
   }
   const saldoDia = baseDia + ingresosHoy - gastosHoy;
 

@@ -61,9 +61,14 @@ function eliminarGasto(id) {
   const g = gastos.find(x => x.id == id);
   if (g) {
     gastos = gastos.filter(x => x.id != id);
-    const idx = accounts[g.cuenta]?.transactions.findIndex(t => t.gastoId == id);
-    if (idx > -1) accounts[g.cuenta].transactions.splice(idx, 1);
+    // Eliminar transacción asociada de todas las cuentas (por si cambió de cuenta)
+    for (const k in accounts) {
+      const idx = accounts[k].transactions.findIndex(t => t.gastoId == id);
+      if (idx > -1) accounts[k].transactions.splice(idx, 1);
+    }
     saveGastos(); saveAccounts(); updateUI(); updateGastosList(); loadTransactions();
+    // FIX: sincronizar eliminación con Sheets
+    Sheets.deleteRow(Sheets.HOJAS.GASTOS, id);
   }
   notify('Gasto eliminado', 'info');
 }
@@ -81,30 +86,38 @@ document.addEventListener('DOMContentLoaded', () => {
       const nota = document.getElementById('gastoNota').value.trim();
       if (!concepto || !monto) { notify('Completa los campos obligatorios', 'warning'); return; }
 
+      let gastoSyncObj = null;
       if (editingGastoId) {
+        // EDICIÓN: actualizar gasto y reconstruir transacción en la cuenta
         const idx = gastos.findIndex(g => g.id == editingGastoId);
         if (idx > -1) {
           const oldG = gastos[idx];
-          const txIdx = accounts[oldG.cuenta]?.transactions.findIndex(t => t.gastoId == editingGastoId);
-          if (txIdx > -1) accounts[oldG.cuenta].transactions.splice(txIdx, 1);
+          // Quitar la transacción vieja de cualquier cuenta (puede haber cambiado de cuenta)
+          for (const k in accounts) {
+            const txIdx = accounts[k].transactions.findIndex(t => t.gastoId == editingGastoId);
+            if (txIdx > -1) accounts[k].transactions.splice(txIdx, 1);
+          }
           gastos[idx] = { ...gastos[idx], concepto, monto, categoria, cuenta, fecha, nota };
+          // Re-agregar transacción actualizada a la cuenta correcta
+          const tx = { id: Date.now(), date: fecha, concept: `Gasto: ${concepto}`, amount: -monto, type: 'egreso', gastoId: editingGastoId };
+          accounts[cuenta].transactions.push(tx);
+          gastoSyncObj = gastos[idx];
         }
       } else {
+        // NUEVO gasto
         const id = Date.now();
         gastos.push({ id, concepto, monto, categoria, cuenta, fecha, nota });
         const tx = { id: id+1, date: fecha, concept: `Gasto: ${concepto}`, amount: -monto, type: 'egreso', gastoId: id };
         accounts[cuenta].transactions.push(tx);
+        gastoSyncObj = gastos[gastos.length - 1];
       }
 
       saveGastos(); saveAccounts(); updateUI(); updateGastosList(); loadTransactions();
       document.getElementById('gastoModal').classList.remove('active');
       notify(editingGastoId ? 'Gasto actualizado' : '✅ Gasto registrado', 'success');
-      editingGastoId = null;
-      // Sincronizar el gasto recién creado/editado (con su id)
-      const gastoSyncObj = editingGastoId
-        ? gastos.find(g => g.id == editingGastoId)
-        : gastos[gastos.length - 1];
+      // FIX: guardar referencia antes de limpiar editingGastoId
       if (gastoSyncObj) sheetsSync('gasto', gastoSyncObj);
+      editingGastoId = null;
     });
   }
 
