@@ -266,10 +266,25 @@ function _clearData(ss, name) {
   sh.getRange(2, 1, lastRow - 1, lastCol).clearContent();
 }
 
+// FIX: cada hoja puede tener el campo 'id' en columnas distintas.
+// 'Transacciones' tiene: ['cuenta','cuentaKey','id',...] → id está en col 3 (índice 2)
+// Todas las demás hojas tienen 'id' en col 1 (índice 0).
+// Esta función detecta automáticamente la columna correcta usando HEADERS.
 function _findRowById(sh, id) {
   var lastRow = sh.getLastRow();
   if (lastRow < 2) return null;
-  var vals = sh.getRange(2, 1, lastRow - 1, 1).getValues();
+
+  // Determinar columna del campo 'id' según la hoja
+  var sheetName = sh.getName();
+  var headers   = HEADERS[sheetName] || [];
+  var idColIdx  = headers.indexOf('id'); // índice 0-based; -1 si no se encuentra
+  if (idColIdx < 0) idColIdx = 0;        // fallback: columna 1
+  var idCol = idColIdx + 1;              // Apps Script usa índice 1-based
+
+  var lastCol = sh.getLastColumn();
+  if (idCol > lastCol) return null;
+
+  var vals = sh.getRange(2, idCol, lastRow - 1, 1).getValues();
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(id)) return i + 2;
   }
