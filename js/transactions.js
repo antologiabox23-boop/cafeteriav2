@@ -141,8 +141,23 @@ document.addEventListener('DOMContentLoaded', () => {
             saveGastos();
           }
         }
-        Sheets.deleteRow(Sheets.HOJAS.TRANSACCIONES, Number(currentEditId));
-        sheetsSync('transaccion', updatedTx);
+        // FIX DUPLICADOS: usar updateRow en vez de deleteRow+appendRow
+        // Así se actualiza la fila existente sin riesgo de duplicado por condición de carrera
+        const accKey = k;
+        const rowData = {
+          cuenta:    accounts[accKey]?.name || '',
+          cuentaKey: accKey,
+          id:        updatedTx.id,
+          date:      updatedTx.date,
+          concept:   updatedTx.concept,
+          amount:    updatedTx.amount,
+          type:      updatedTx.type || (updatedTx.amount >= 0 ? 'ingreso' : 'egreso'),
+          esventa:   updatedTx.esventa ? 'SI' : 'NO',
+          cliente:   updatedTx.cliente    || '',
+          facturaId: updatedTx.facturaId  || '',
+          gastoId:   updatedTx.gastoId    || ''
+        };
+        Sheets.updateRow(Sheets.HOJAS.TRANSACCIONES, Number(currentEditId), rowData);
       }
     } else {
       const tx = { id: Date.now(), date, concept, amount: signedAmount, type,

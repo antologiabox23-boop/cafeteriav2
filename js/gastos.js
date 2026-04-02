@@ -102,13 +102,29 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           gastos[idx] = { ...gastos[idx], concepto, monto, categoria, cuenta, fecha, nota };
           // Re-agregar transacción actualizada a la cuenta correcta
-          const newTxId = Date.now();
+          const newTxId = oldTxId || Date.now(); // FIX: reusar el mismo id si existe
           const tx = { id: newTxId, date: fecha, concept: `Gasto: ${concepto}`, amount: -monto, type: 'egreso', gastoId: editingGastoId, accKey: cuenta, accName: accounts[cuenta].name };
           accounts[cuenta].transactions.push(tx);
           gastoSyncObj = gastos[idx];
-          // Eliminar tx vieja de Sheets y agregar la actualizada
-          if (oldTxId) Sheets.deleteRow(Sheets.HOJAS.TRANSACCIONES, oldTxId);
-          sheetsSync('transaccion', tx);
+          // FIX DUPLICADOS: si existe tx previa, actualizarla en Sheets en vez de borrar+agregar
+          if (oldTxId) {
+            const txRow = {
+              cuenta:    accounts[cuenta]?.name || '',
+              cuentaKey: cuenta,
+              id:        newTxId,
+              date:      fecha,
+              concept:   `Gasto: ${concepto}`,
+              amount:    -monto,
+              type:      'egreso',
+              esventa:   'NO',
+              cliente:   '',
+              facturaId: '',
+              gastoId:   String(editingGastoId)
+            };
+            Sheets.updateRow(Sheets.HOJAS.TRANSACCIONES, oldTxId, txRow);
+          } else {
+            sheetsSync('transaccion', tx);
+          }
         }
       } else {
         // NUEVO gasto
@@ -125,8 +141,8 @@ document.addEventListener('DOMContentLoaded', () => {
       saveGastos(); saveAccounts(); updateUI(); updateGastosList(); loadTransactions();
       document.getElementById('gastoModal').classList.remove('active');
       const wasEditing = !!editingGastoId;
-      // FIX: guardar referencia antes de limpiar editingGastoId
-      if (gastoSyncObj) sheetsSync('gasto', gastoSyncObj);
+      // FIX DUPLICADOS: si editando, actualizar fila; si nuevo, agregar fila
+      if (gastoSyncObj) { if (wasEditing) { Sheets.updateRow(Sheets.HOJAS.GASTOS, gastoSyncObj.id, gastoSyncObj); } else { sheetsSync("gasto", gastoSyncObj); } }
       editingGastoId = null;
       notify(wasEditing ? 'Gasto actualizado' : '✅ Gasto registrado', 'success');
     });
