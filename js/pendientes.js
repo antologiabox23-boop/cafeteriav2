@@ -40,7 +40,7 @@ function confirmarGuardarPendienteConNombre() {
   const yaExiste = creditos.some(c => c.cliente.toLowerCase() === nombre.toLowerCase());
   if (!yaExiste) {
     const credAuto = { id: Date.now(), cliente: nombre, deuda: 0,
-      desc: 'Cliente registrado al guardar pendiente', fecha: fmtDateInput(new Date()), pagos: [] };
+      desc: 'Cliente registrado al guardar pendiente', fecha: fmtDateInput(new Date()), pagos: [], _isNew: true };
     creditos.push(credAuto);
     saveCreditos(); updateCreditosList();
     // FIX: sincronizar cliente auto-creado con Sheets
@@ -58,10 +58,10 @@ function _guardarPendienteConCliente(cliente) {
     fecha: fmtDateInput(new Date()),
     hora:  new Date().toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' })
   };
+  p._isNew = true;
   pendientes.push(p);
   savePendientes(); limpiarOrden(); updatePendientesList();
   updatePendBadge(); updateClienteSuggestions();
-  // FIX: sincronizar nuevo pendiente con Sheets
   sheetsSync('pendiente', p);
   notify(`⏳ Pedido de ${p.cliente} guardado como pendiente`, 'info');
   switchTab('pendientes');
@@ -475,11 +475,10 @@ function moverACreditoPendiente(id) {
   if (!p) return;
   const restante = p.esPreventa ? (p.total - (p.totalEntregado || 0)) : p.total;
   const nuevoCred = { id: Date.now(), cliente: p.cliente, deuda: restante,
-                  desc: p.concepto, fecha: p.fecha, pagos: [] };
+                  desc: p.concepto, fecha: p.fecha, pagos: [], _isNew: true };
   creditos.push(nuevoCred);
   pendientes = pendientes.filter(x => x.id !== id);
   saveCreditos(); savePendientes();
-  // FIX: sincronizar nuevo crédito y eliminación del pendiente con Sheets
   sheetsSync('credito', nuevoCred);
   Sheets.deleteRow(Sheets.HOJAS.PENDIENTES, id);
   updatePendientesList(); updatePendBadge(); updateCreditosList();

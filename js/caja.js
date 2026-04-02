@@ -558,7 +558,7 @@ function _confirmarCierre(efectivoReal = 0) {
     if (esPrev(p)) return; // preventa ya cobrada — solo queda la entrega física
     creditos.push({
       id: Date.now() + movidos, cliente: p.cliente, deuda: p.total,
-      desc: `[Cierre ${today}] ${p.concepto}`, fecha: p.fecha, pagos: []
+      desc: `[Cierre ${today}] ${p.concepto}`, fecha: p.fecha, pagos: [], _isNew: true
     });
     sheetsSync('credito', creditos[creditos.length - 1]);
     movidos++;

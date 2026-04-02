@@ -546,7 +546,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('facturaModal').classList.remove('active');
     notify(`✅ Factura guardada · $${fmt(total)} registrado como gasto en ${accounts[cuenta]?.name||cuenta}`, 'success');
+    // si es nueva factura → appendRow; si es edición → updateRow
+    if (!editingFacturaId) fac._isNew = true;
     sheetsSync('factura', fac);
+    if (!editingFacturaId) { tx._isNew = true; gasto._isNew = true; }
     sheetsSync('transaccion', tx);
     sheetsSync('gasto', gasto);
     editingFacturaId = null;

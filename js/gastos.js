@@ -102,35 +102,19 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           gastos[idx] = { ...gastos[idx], concepto, monto, categoria, cuenta, fecha, nota };
           // Re-agregar transacción actualizada a la cuenta correcta
-          const newTxId = oldTxId || Date.now(); // FIX: reusar el mismo id si existe
+          const newTxId = Date.now();
           const tx = { id: newTxId, date: fecha, concept: `Gasto: ${concepto}`, amount: -monto, type: 'egreso', gastoId: editingGastoId, accKey: cuenta, accName: accounts[cuenta].name };
           accounts[cuenta].transactions.push(tx);
           gastoSyncObj = gastos[idx];
-          // FIX DUPLICADOS: si existe tx previa, actualizarla en Sheets en vez de borrar+agregar
-          if (oldTxId) {
-            const txRow = {
-              cuenta:    accounts[cuenta]?.name || '',
-              cuentaKey: cuenta,
-              id:        newTxId,
-              date:      fecha,
-              concept:   `Gasto: ${concepto}`,
-              amount:    -monto,
-              type:      'egreso',
-              esventa:   'NO',
-              cliente:   '',
-              facturaId: '',
-              gastoId:   String(editingGastoId)
-            };
-            Sheets.updateRow(Sheets.HOJAS.TRANSACCIONES, oldTxId, txRow);
-          } else {
-            sheetsSync('transaccion', tx);
-          }
+          // Eliminar tx vieja de Sheets y agregar la actualizada
+          if (oldTxId) Sheets.deleteRow(Sheets.HOJAS.TRANSACCIONES, oldTxId);
+          sheetsSync('transaccion', tx);
         }
       } else {
         // NUEVO gasto
         const id = Date.now();
         const txId = id + 1;
-        gastos.push({ id, concepto, monto, categoria, cuenta, fecha, nota });
+        gastos.push({ id, concepto, monto, categoria, cuenta, fecha, nota, _isNew: true });
         const tx = { id: txId, date: fecha, concept: `Gasto: ${concepto}`, amount: -monto, type: 'egreso', gastoId: id, accKey: cuenta, accName: accounts[cuenta].name };
         accounts[cuenta].transactions.push(tx);
         gastoSyncObj = gastos[gastos.length - 1];
@@ -141,8 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
       saveGastos(); saveAccounts(); updateUI(); updateGastosList(); loadTransactions();
       document.getElementById('gastoModal').classList.remove('active');
       const wasEditing = !!editingGastoId;
-      // FIX DUPLICADOS: si editando, actualizar fila; si nuevo, agregar fila
-      if (gastoSyncObj) { if (wasEditing) { Sheets.updateRow(Sheets.HOJAS.GASTOS, gastoSyncObj.id, gastoSyncObj); } else { sheetsSync("gasto", gastoSyncObj); } }
+      // FIX: guardar referencia antes de limpiar editingGastoId
+      if (gastoSyncObj) sheetsSync('gasto', gastoSyncObj);
       editingGastoId = null;
       notify(wasEditing ? 'Gasto actualizado' : '✅ Gasto registrado', 'success');
     });

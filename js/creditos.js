@@ -129,7 +129,7 @@ function confirmarAbono() {
   accounts[cuenta].transactions.push(tx);
   saveCreditos(); saveAccounts();
   // FIX: sincronizar crédito actualizado (con el nuevo pago) y la transacción de ingreso
-  sheetsSync('credito', creditos[idx]);
+  sheetsSync('credito', creditos[idx]); // sin _isNew → updateRow (abono sobre crédito existente)
   sheetsSync('transaccion', tx);
   updateUI(); updateCreditosList(); loadTransactions(); updateCajaHdr();
   document.getElementById('abonoModal').classList.remove('active');
@@ -167,10 +167,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const desc = document.getElementById('creditoDesc').value.trim();
       const fecha = document.getElementById('creditoFecha').value;
       if (!cliente || !deuda || !desc) { notify('Completa todos los campos', 'warning'); return; }
-      const nuevoCred = { id: Date.now(), cliente, deuda, desc, fecha, pagos: [] };
+      const nuevoCred = { id: Date.now(), cliente, deuda, desc, fecha, pagos: [], _isNew: true };
       creditos.push(nuevoCred);
       saveCreditos(); updateCreditosList(); updateClienteSuggestions();
-      // FIX: sincronizar nuevo crédito con Sheets
       sheetsSync('credito', nuevoCred);
       document.getElementById('creditoModal').classList.remove('active');
       notify('Crédito registrado', 'success');

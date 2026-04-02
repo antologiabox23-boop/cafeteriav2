@@ -189,16 +189,28 @@ function sheetsSync(tipo, obj) {
         }
         break;
       case 'gasto':
-        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.GASTOS, obj);
+        if (obj && obj.id) {
+          if (obj._isNew) Sheets.appendRow(Sheets.HOJAS.GASTOS, obj);
+          else Sheets.updateRow(Sheets.HOJAS.GASTOS, obj.id, obj);
+        }
         break;
       case 'credito':
-        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.CREDITOS, obj);
+        if (obj && obj.id) {
+          if (obj._isNew) Sheets.appendRow(Sheets.HOJAS.CREDITOS, obj);
+          else Sheets.updateRow(Sheets.HOJAS.CREDITOS, obj.id, obj);
+        }
         break;
       case 'pendiente':
-        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.PENDIENTES, obj);
+        if (obj && obj.id) {
+          if (obj._isNew) Sheets.appendRow(Sheets.HOJAS.PENDIENTES, obj);
+          else Sheets.updateRow(Sheets.HOJAS.PENDIENTES, obj.id, obj);
+        }
         break;
       case 'factura':
-        if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.FACTURAS, obj);
+        if (obj && obj.id) {
+          if (obj._isNew) Sheets.appendRow(Sheets.HOJAS.FACTURAS, obj);
+          else Sheets.updateRow(Sheets.HOJAS.FACTURAS, obj.id, obj);
+        }
         break;
       case 'stockmov':
         if (obj && obj.id) Sheets.appendRow(Sheets.HOJAS.STOCK_MOVS, obj);
