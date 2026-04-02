@@ -108,12 +108,4 @@ document.addEventListener('DOMContentLoaded', function () {
   setupBackupFile();
 });
 
-function resetTxForm() {
-  const form = document.getElementById('transactionForm');
-  if (form) form.reset();
-  setTodayDate();
-  document.getElementById('transactionId').value      = '';
-  document.getElementById('originalAccount').value    = '';
-  document.getElementById('deleteTransactionBtn').style.display = 'none';
-  document.getElementById('modalTitle').textContent   = 'Nueva Transacción';
-}
+// resetTxForm está definida en transactions.js (versión completa con isEditing/currentEditId)

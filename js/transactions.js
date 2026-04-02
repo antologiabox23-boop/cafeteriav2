@@ -120,13 +120,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (isEditing && currentEditId) {
       const origK = document.getElementById('originalAccount').value;
-      const idx = accounts[origK]?.transactions.findIndex(t => t.id === currentEditId);
+      // FIX: usar == en lugar de === para evitar fallo por tipo (number vs string)
+      const idx = accounts[origK]?.transactions.findIndex(t => t.id == currentEditId);
       if (idx > -1) {
+        const oldTx = accounts[origK].transactions[idx];
         accounts[origK].transactions.splice(idx, 1);
-        const updatedTx = { id: currentEditId, date, concept, amount: signedAmount, type,
-                            accKey: k, accName: accounts[k].name };
+        const updatedTx = { id: Number(currentEditId), date, concept, amount: signedAmount, type,
+                            accKey: k, accName: accounts[k].name,
+                            // FIX: preservar gastoId si existía para no romper el vínculo
+                            gastoId: oldTx.gastoId || undefined,
+                            esventa: oldTx.esventa || false,
+                            cliente: oldTx.cliente || null };
         accounts[k].transactions.push(updatedTx);
-        Sheets.deleteRow(Sheets.HOJAS.TRANSACCIONES, currentEditId);
+        // FIX: si era una tx de gasto, actualizar también el monto/cuenta en gastos[]
+        if (oldTx.gastoId) {
+          const gIdx = gastos.findIndex(g => g.id == oldTx.gastoId);
+          if (gIdx > -1) {
+            gastos[gIdx] = { ...gastos[gIdx], monto: amount, cuenta: k, fecha: date,
+                             concepto: concept.replace(/^Gasto:\s*/, '') };
+            saveGastos();
+          }
+        }
+        Sheets.deleteRow(Sheets.HOJAS.TRANSACCIONES, Number(currentEditId));
         sheetsSync('transaccion', updatedTx);
       }
     } else {
